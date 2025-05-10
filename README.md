@@ -4,7 +4,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.68.0-green.svg)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13-blue.svg)
 
-**Autor:** Isaac Rodríguez Romez  
+**Autor:** Isaac Rodríguez ROMEZ  
 **Desarrollado para:** Curso PyKedex de DruidCode
 
 ## Descripción del Proyecto
