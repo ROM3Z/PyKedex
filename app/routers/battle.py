@@ -6,13 +6,16 @@ import random
 from .. import schemas, crud, models
 from ..database import get_db
 
-router = APIRouter(
-    prefix="/battles",
-    tags=["battles"]
+router = APIRouter(  
+    tags=["Batallas"]  # Agrupación para la documentación Swagger/OpenAPI
 )
 
-# Sistema de ventajas por tipo (basado en las mecánicas de Pokémon)
+# --------------------------------------------------
+# SISTEMA DE TIPOS POKÉMON (EFECTIVIDADES)
+# --------------------------------------------------
+
 TYPE_ADVANTAGES = {
+    # Efectividades (2x de daño)
     "Planta": {"Agua": 2.0, "Roca": 2.0, "Tierra": 2.0},
     "Fuego": {"Planta": 2.0, "Bicho": 2.0, "Hielo": 2.0, "Acero": 2.0},
     "Agua": {"Fuego": 2.0, "Roca": 2.0, "Tierra": 2.0},
@@ -30,7 +33,8 @@ TYPE_ADVANTAGES = {
     "Siniestro": {"Psíquico": 2.0, "Fantasma": 2.0},
     "Acero": {"Hielo": 2.0, "Roca": 2.0, "Hada": 2.0},
     "Hada": {"Lucha": 2.0, "Dragón": 2.0, "Siniestro": 2.0},
-    # Debilidades (0.5 de daño)
+    
+    # Debilidades (0.5x de daño)
     "Planta": {"Fuego": 0.5, "Volador": 0.5, "Bicho": 0.5, "Hielo": 0.5, "Veneno": 0.5},
     "Fuego": {"Agua": 0.5, "Roca": 0.5, "Tierra": 0.5},
     "Agua": {"Eléctrico": 0.5, "Planta": 0.5},
@@ -63,44 +67,62 @@ def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
     
     return multiplier
 
+# --------------------------------------------------
+# MECÁNICAS DE COMBATE
+# --------------------------------------------------
+
 def get_random_attack(pokemon: schemas.Pokemon) -> str:
     """Obtiene un ataque aleatorio de los movimientos del Pokémon"""
-    if pokemon.moves:
-        attack_moves = [move for move in pokemon.moves if move]
-        if attack_moves:
-            return random.choice(attack_moves)
-    default_attacks = ["Placaje", "Lanzallamas", "Rayo Solar", "Hidrobomba", "Impactrueno"]
-    return random.choice(default_attacks)
+    if pokemon.moves and len(pokemon.moves) > 0:
+        return random.choice(pokemon.moves)
+    return random.choice(["Placaje", "Arañazo", "Gruñido"])
 
 def calculate_damage(attacker: schemas.Pokemon, defender: schemas.Pokemon, attack_used: str) -> int:
-    """Calcula el daño considerando ataque, defensa y ventaja por tipo"""
-    # Daño base aleatorio entre 1 y el ataque del Pokémon
-    base_damage = random.randint(1, attacker.attack or 10)
+    """
+    Calcula el daño de un ataque considerando:
+    - Ataque/Defensa base
+    - Ventaja de tipo
+    - Aleatoriedad
+    """
+    # Daño base con variación aleatoria
+    base_damage = random.randint(5, attacker.attack or 15)
     
-    # Factor de defensa (reduce el daño)
-    defense_factor = max(1, (defender.defense or 10) / 100)
+    # Reducción por defensa
+    defense_factor = max(1, (defender.defense or 10) / 10)
     
-    # Ventaja por tipo
-    type_multiplier = get_type_multiplier(attacker.element, defender.element)
+    # Multiplicador por tipo
+    type_multiplier = get_type_multiplier(attacker.element or "Normal", defender.element or "Normal")
     
-    # Daño final con todos los factores
-    final_damage = max(1, int((base_damage * type_multiplier) / defense_factor))
+    # Daño final
+    damage = max(1, int((base_damage * type_multiplier) / defense_factor))
     
-    return final_damage
+    # Ataques especiales tienen bonus
+    if "especial" in attack_used.lower():
+        damage = int(damage * 1.2)
+    
+    return damage
+
+# --------------------------------------------------
+# SIMULACIÓN DE BATALLA
+# --------------------------------------------------
 
 async def simulate_battle(
     db: AsyncSession, 
     trainer_id: int, 
     opponent_id: int
 ) -> schemas.BattleResult:
-    # Verificar que los entrenadores existen
+    """
+    Simula una batalla Pokémon completa entre dos entrenadores
+    con mecánicas de turnos, tipos y daño.
+    """
+    # Validación de entrenadores
     trainer = await crud.get_trainer(db, trainer_id)
     opponent = await crud.get_trainer(db, opponent_id)
     
     if not trainer or not opponent:
         raise HTTPException(status_code=404, detail="Entrenador no encontrado")
     
-    # Obtener los Pokémon de cada entrenador
+    # Validación de equipos Pokémon
     trainer_pokemons = await crud.get_trainer_pokemons(db, trainer_id)
     opponent_pokemons = await crud.get_trainer_pokemons(db, opponent_id)
     
@@ -110,33 +132,31 @@ async def simulate_battle(
             detail="Ambos entrenadores necesitan Pokémon para pelear"
         )
     
-    # Seleccionar Pokémon aleatorio
+    # Selección aleatoria de Pokémon
     trainer_pokemon = random.choice(trainer_pokemons).pokemon
     opponent_pokemon = random.choice(opponent_pokemons).pokemon
     
-    # Inicializar HP
-    trainer_hp = trainer_pokemon.current_hp if trainer_pokemon.current_hp is not None else (trainer_pokemon.hp or 100)
-    opponent_hp = opponent_pokemon.current_hp if opponent_pokemon.current_hp is not None else (opponent_pokemon.hp or 100)
+    # Inicialización de HP
+    trainer_hp = trainer_pokemon.current_hp or trainer_pokemon.hp or 100
+    opponent_hp = opponent_pokemon.current_hp or opponent_pokemon.hp or 100
     
-    if trainer_hp <= 0 or opponent_hp <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Los Pokémon deben tener HP mayor que 0 para pelear"
-        )
-    
-    # Simular batalla por turnos
+    # Registro de batalla
     battle_log = []
     last_trainer_attack = ""
     last_opponent_attack = ""
     
+    # Sistema de turnos
     while trainer_hp > 0 and opponent_hp > 0:
         # Turno del entrenador
         last_trainer_attack = get_random_attack(trainer_pokemon)
         damage = calculate_damage(trainer_pokemon, opponent_pokemon, last_trainer_attack)
         opponent_hp -= damage
         
-        # Verificar ventaja de tipo
-        type_multiplier = get_type_multiplier(trainer_pokemon.element, opponent_pokemon.element)
+        type_multiplier = get_type_multiplier(
+            trainer_pokemon.element or "Normal", 
+            opponent_pokemon.element or "Normal"
+        )
+        
         type_message = ""
         if type_multiplier > 1.5:
             type_message = " ¡Es muy efectivo!"
@@ -144,8 +164,8 @@ async def simulate_battle(
             type_message = " ¡No es muy efectivo..."
         
         battle_log.append(
-            f"{trainer_pokemon.name} usa {last_trainer_attack} contra {opponent_pokemon.name} "
-            f"y causa {damage} de daño{type_message}"
+            f"{trainer.name}: {trainer_pokemon.name} usa {last_trainer_attack} "
+            f"contra {opponent_pokemon.name} (-{damage} HP){type_message}"
         )
         
         if opponent_hp <= 0:
@@ -157,8 +177,11 @@ async def simulate_battle(
         damage = calculate_damage(opponent_pokemon, trainer_pokemon, last_opponent_attack)
         trainer_hp -= damage
         
-        # Verificar ventaja de tipo
-        type_multiplier = get_type_multiplier(opponent_pokemon.element, trainer_pokemon.element)
+        type_multiplier = get_type_multiplier(
+            opponent_pokemon.element or "Normal", 
+            trainer_pokemon.element or "Normal"
+        )
+        
         type_message = ""
         if type_multiplier > 1.5:
             type_message = " ¡Es muy efectivo!"
@@ -166,14 +189,14 @@ async def simulate_battle(
             type_message = " ¡No es muy efectivo..."
         
         battle_log.append(
-            f"{opponent_pokemon.name} usa {last_opponent_attack} contra {trainer_pokemon.name} "
-            f"y causa {damage} de daño{type_message}"
+            f"{opponent.name}: {opponent_pokemon.name} usa {last_opponent_attack} "
+            f"contra {trainer_pokemon.name} (-{damage} HP){type_message}"
         )
         
         if trainer_hp <= 0:
             battle_log.append(f"¡{trainer_pokemon.name} se debilitó!")
     
-    # Determinar resultados (el resto del código permanece igual)
+    # Determinación del ganador
     if trainer_hp > 0 and opponent_hp <= 0:
         winner_name = trainer.name
         winner_id = trainer.id
@@ -187,7 +210,7 @@ async def simulate_battle(
         winner_id = None
         loser_name = "Empate"
 
-    # Crear registro de batalla
+    # Registro en base de datos
     battle_data = schemas.BattleCreate(
         trainer_id=trainer_id,
         opponent_id=opponent_id
@@ -195,15 +218,18 @@ async def simulate_battle(
     
     db_battle = await crud.create_battle(db, battle_data)
     
-    # Actualizar batalla con el resultado (excepto empates)
+    # Actualización con resultado
     if winner_name != "Empate":
-        update_data = schemas.BattleUpdate(
-            winner=winner_name,
-            date=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        await crud.update_battle(
+            db, 
+            db_battle.id, 
+            schemas.BattleUpdate(
+                winner=winner_name,
+                date=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
         )
-        db_battle = await crud.update_battle(db, db_battle.id, update_data)
     
-    # Registrar Pokémon en la batalla
+    # Registro de Pokémon participantes
     await crud.add_pokemon_to_battle(
         db,
         schemas.BattlePokemonCreate(
@@ -224,6 +250,7 @@ async def simulate_battle(
         )
     )
     
+    # Resultado detallado
     return schemas.BattleResult(
         battle_id=db_battle.id,
         winner_id=winner_id,
@@ -238,12 +265,16 @@ async def simulate_battle(
         last_opponent_attack=last_opponent_attack
     )
 
-# Los endpoints permanecen iguales
+# --------------------------------------------------
+# ENDPOINTS DE LA API
+# --------------------------------------------------
+
 @router.post("/", response_model=schemas.BattleResult)
 async def create_battle(
     battle: schemas.BattleCreate, 
     db: AsyncSession = Depends(get_db)
 ):
+    """Inicia una nueva batalla entre dos entrenadores"""
     if battle.trainer_id == battle.opponent_id:
         raise HTTPException(
             status_code=400,
@@ -256,10 +287,12 @@ async def read_battle(
     battle_id: int,
     db: AsyncSession = Depends(get_db)
 ):
+    """Obtiene los detalles completos de una batalla específica"""
     db_battle = await crud.get_battle_with_pokemons(db, battle_id)
     if db_battle is None:
         raise HTTPException(status_code=404, detail="Batalla no encontrada")
     
+    # Asegurar nombres de entrenadores
     if not hasattr(db_battle, 'trainer_name'):
         trainer = await crud.get_trainer(db, db_battle.trainer_id)
         db_battle.trainer_name = trainer.name if trainer else "Desconocido"
@@ -273,11 +306,13 @@ async def read_battle(
 @router.get("/", response_model=List[schemas.Battle])
 async def read_battles(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 10,
     db: AsyncSession = Depends(get_db)
 ):
+    """Obtiene un listado paginado de todas las batallas registradas"""
     battles = await crud.get_battles(db, skip=skip, limit=limit)
     
+    # Asegurar nombres de entrenadores
     for battle in battles:
         if not hasattr(battle, 'trainer_name'):
             trainer = await crud.get_trainer(db, battle.trainer_id)
