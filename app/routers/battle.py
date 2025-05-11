@@ -11,6 +11,15 @@ router = APIRouter(
     tags=["battles"]
 )
 
+def get_random_attack(pokemon: schemas.Pokemon) -> str:
+    """Obtiene un ataque aleatorio de los movimientos del Pokémon"""
+    if pokemon.moves:
+        attack_moves = [move for move in pokemon.moves if move]
+        if attack_moves:
+            return random.choice(attack_moves)
+    default_attacks = ["Placaje", "Lanzallamas", "Rayo Solar", "Hidrobomba", "Impactrueno"]
+    return random.choice(default_attacks)
+
 def calculate_damage(attacker: schemas.Pokemon, defender: schemas.Pokemon) -> int:
     """Calcula el daño considerando ataque y defensa"""
     base_damage = random.randint(1, attacker.attack or 10)
@@ -55,20 +64,31 @@ async def simulate_battle(
     
     # Simular batalla por turnos
     battle_log = []
+    last_trainer_attack = ""
+    last_opponent_attack = ""
+    
     while trainer_hp > 0 and opponent_hp > 0:
         # Turno del entrenador
+        last_trainer_attack = get_random_attack(trainer_pokemon)
         damage = calculate_damage(trainer_pokemon, opponent_pokemon)
         opponent_hp -= damage
-        battle_log.append(f"{trainer_pokemon.name} ataca a {opponent_pokemon.name} y causa {damage} de daño")
+        battle_log.append(
+            f"{trainer_pokemon.name} usa {last_trainer_attack} contra {opponent_pokemon.name} "
+            f"y causa {damage} de daño"
+        )
         
         if opponent_hp <= 0:
             battle_log.append(f"¡{opponent_pokemon.name} se debilitó!")
             break
             
         # Turno del oponente
+        last_opponent_attack = get_random_attack(opponent_pokemon)
         damage = calculate_damage(opponent_pokemon, trainer_pokemon)
         trainer_hp -= damage
-        battle_log.append(f"{opponent_pokemon.name} ataca a {trainer_pokemon.name} y causa {damage} de daño")
+        battle_log.append(
+            f"{opponent_pokemon.name} usa {last_opponent_attack} contra {trainer_pokemon.name} "
+            f"y causa {damage} de daño"
+        )
         
         if trainer_hp <= 0:
             battle_log.append(f"¡{trainer_pokemon.name} se debilitó!")
@@ -133,7 +153,9 @@ async def simulate_battle(
         opponent_pokemon=opponent_pokemon,
         trainer_hp_remaining=max(0, trainer_hp),
         opponent_hp_remaining=max(0, opponent_hp),
-        battle_log=battle_log
+        battle_log=battle_log,
+        last_trainer_attack=last_trainer_attack,
+        last_opponent_attack=last_opponent_attack
     )
 
 @router.post("/", response_model=schemas.BattleResult)
@@ -146,7 +168,6 @@ async def create_battle(
             status_code=400,
             detail="No puedes pelear contra ti mismo"
         )
-    
     return await simulate_battle(db, battle.trainer_id, battle.opponent_id)
 
 @router.get("/{battle_id}", response_model=schemas.BattleWithPokemon)
@@ -158,10 +179,14 @@ async def read_battle(
     if db_battle is None:
         raise HTTPException(status_code=404, detail="Batalla no encontrada")
     
-    # Asegurar que trainer_name esté incluido
+    # Asegurar que los nombres estén incluidos
     if not hasattr(db_battle, 'trainer_name'):
         trainer = await crud.get_trainer(db, db_battle.trainer_id)
         db_battle.trainer_name = trainer.name if trainer else "Desconocido"
+    
+    if not hasattr(db_battle, 'opponent_name'):
+        opponent = await crud.get_trainer(db, db_battle.opponent_id)
+        db_battle.opponent_name = opponent.name if opponent else "Desconocido"
     
     return db_battle
 
@@ -173,10 +198,13 @@ async def read_battles(
 ):
     battles = await crud.get_battles(db, skip=skip, limit=limit)
     
-    # Añadir trainer_name a cada batalla
+    # Añadir nombres a cada batalla
     for battle in battles:
         if not hasattr(battle, 'trainer_name'):
             trainer = await crud.get_trainer(db, battle.trainer_id)
             battle.trainer_name = trainer.name if trainer else "Desconocido"
+        if not hasattr(battle, 'opponent_name'):
+            opponent = await crud.get_trainer(db, battle.opponent_id)
+            battle.opponent_name = opponent.name if opponent else "Desconocido"
     
     return battles

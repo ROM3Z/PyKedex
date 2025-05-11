@@ -17,4 +17,4 @@ async def startup():
 
 @app.get("/")
 async def root():
-    return {"message": "¡Muy pronto Pydékex!"}
+    return {"message": "¡Muy pronto PyKedex!"}

@@ -59,7 +59,7 @@ class TrainerPokemon(TrainerPokemonBase):
 
 class BattleBase(BaseModel):
     trainer_id: int
-    opponent_name: str
+    opponent_id: int
     winner: Optional[str] = None
     date: Optional[str] = None
 
@@ -73,7 +73,8 @@ class BattleUpdate(BaseModel):
 
 class Battle(BattleBase):
     id: int
-    trainer_name: Optional[str] = None  # Nuevo campo para mostrar nombre
+    trainer_name: Optional[str] = None
+    opponent_name: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -112,6 +113,8 @@ class BattleResult(BaseModel):
     trainer_hp_remaining: int
     opponent_hp_remaining: int
     battle_log: List[str]
+    last_trainer_attack: str
+    last_opponent_attack: str
 
 # ----------------- PARA REFERENCIAS CIRCULARES -----------------
 
