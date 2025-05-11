@@ -7,3 +7,5 @@ python-multipart==0.0.5
 fuzzywuzzy>=0.18.0
 python-Levenshtein>=0.12.2
 fastapi-cache2>=0.2.0
+slowapi==0.1.7
+limits==3.1.0

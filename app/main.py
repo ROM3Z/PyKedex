@@ -1,13 +1,24 @@
-from fastapi import FastAPI
-from app.database import engine, Base  # Importa la configuración de la base de datos
-from app.routers import pokemon, trainer, battle  # Importa los routers de cada módulo
-import asyncio
+from fastapi import FastAPI, Request, Depends
+from app.database import engine, Base
+from app.routers import pokemon, trainer, battle
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi import HTTPException
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # --------------------------------------------------
-# CONFIGURACIÓN INICIAL DE LA APLICACIÓN
+# CONFIGURACIÓN DEL RATE LIMITER
 # --------------------------------------------------
 
-# Crea la instancia principal de FastAPI
+limiter = Limiter(key_func=get_remote_address)
+
+# --------------------------------------------------
+# CONFIGURACIÓN DE LA APLICACIÓN
+# --------------------------------------------------
+
 app = FastAPI(
     title="PyKedex API",
     description="API para el sistema de gestión de Pokémon y batallas",
@@ -21,97 +32,97 @@ app = FastAPI(
     }
 )
 
+# Añade el middleware de rate limiting
+app.add_middleware(SlowAPIMiddleware)
+
+# Configura el rate limiter
+app.state.limiter = limiter
+
 # --------------------------------------------------
-# REGISTRO DE ROUTERS (ENDPOINTS)
+# MANEJADOR DE ERRORES PARA RATE LIMIT
 # --------------------------------------------------
 
-# Incluye los routers para cada módulo con prefijos y etiquetas específicas
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "message": "Ha superado el límite de 10 solicitudes por minuto. Por favor espere.",
+            "success": False,
+            "error": "RateLimitExceeded"
+        },
+        headers={
+            "Retry-After": str(60)  # Indica cuántos segundos esperar (60 = 1 minuto)
+        }
+    )
+
+# --------------------------------------------------
+# REGISTRO DE ROUTERS CON RATE LIMITING
+# --------------------------------------------------
+
+# Router de Pokémon con rate limiting
+pokemon.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="pokemon"))]
 app.include_router(
     pokemon.router,
-    prefix="/api/v1/pokemons",  # Cambia el prefijo para los pokémons
-    # para evitar conflictos con el prefijo de Entrenadores
+    prefix="/api/v1/pokemons",
     tags=["Pokémon"]
 )
 
+# Router de Entrenadores con rate limiting
+trainer.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="trainer"))]
 app.include_router(
     trainer.router,
-    prefix="/api/v1/entrenadores",  # Cambia el prefijo para los entrenadores
-    # para evitar conflictos con el prefijo de Pokémon
+    prefix="/api/v1/entrenadores",
     tags=["Entrenadores"]
 )
 
+# Router de Batallas con rate limiting
+battle.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="battle"))]
 app.include_router(
     battle.router,
-    prefix="/api/v1/batallas",  # Cambia el prefijo para las batallas
-    # para evitar conflictos con el prefijo de Pokémon
-    # y para mantener una estructura clara en la API
+    prefix="/api/v1/batallas",
     tags=["Batallas"]
 )
 
 # --------------------------------------------------
-# EVENTOS DE LA APLICACIÓN
+# ENDPOINTS BÁSICOS (SIN RATE LIMITING)
 # --------------------------------------------------
 
 @app.on_event("startup")
 async def startup():
-    """
-    Evento que se ejecuta al iniciar la aplicación.
-    Crea todas las tablas en la base de datos si no existen.
-    """
     async with engine.begin() as conn:
-        # Crea todas las tablas definidas en los modelos SQLAlchemy
         await conn.run_sync(Base.metadata.create_all)
-        
-        # Mensaje de confirmación en logs
         print("Base de datos inicializada correctamente")
-    
-    # Aquí podrías añadir más lógica de inicialización si es necesario
-    # como cargar datos iniciales, configurar conexiones externas, etc.
-
-# --------------------------------------------------
-# ENDPOINT RAIZ
-# --------------------------------------------------
 
 @app.get("/", tags=["Inicio"])
 async def root():
-    """
-    Endpoint raíz que provee un mensaje de bienvenida.
-    
-    Returns:
-        dict: Mensaje de bienvenida en formato JSON
-    """
     return {
         "message": "¡Bienvenido a PyKedex!",
         "documentación": "/docs",
         "versión": "1.0.0",
         "rutas_disponibles": {
             "pokemons": "/api/v1/pokemons",
-            "entrenadores": "/api/v1/trainers",
-            "batallas": "/api/v1/battles"
+            "entrenadores": "/api/v1/entrenadores",
+            "batallas": "/api/v1/batallas"
         }
     }
 
 # --------------------------------------------------
-# CONFIGURACIÓN ADICIONAL (OPCIONAL)
+# CONFIGURACIÓN ADICIONAL
 # --------------------------------------------------
 
-# Ejemplo de middleware para manejar CORS (si se necesita)
-from fastapi.middleware.cors import CORSMiddleware
-
+# Middleware para CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especifica dominios permitidos
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Ejemplo de manejo de excepciones personalizadas
-from fastapi import HTTPException
-from fastapi.responses import JSONResponse
-
+# Manejador de excepciones generales
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
+async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={
