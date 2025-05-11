@@ -73,6 +73,24 @@ async def get_pokemons(
     result = await db.execute(query)
     return result.scalars().all()
 
+async def get_pokemon_by_name(db: AsyncSession, name: str):
+    """Busca un Pokémon por nombre exacto (case insensitive)"""
+    result = await db.execute(
+        select(models.Pokemon)
+        .where(func.lower(models.Pokemon.name) == func.lower(name))
+    )
+    return result.scalars().first()
+
+async def get_pokemons_by_names(db: AsyncSession, names: List[str], skip: int = 0, limit: int = 10):
+    """Busca Pokémon por lista de nombres exactos"""
+    result = await db.execute(
+        select(models.Pokemon)
+        .where(models.Pokemon.name.in_(names))
+        .offset(skip)
+        .limit(limit)
+    )
+    return result.scalars().all()
+
 async def search_pokemons_by_name(
     db: AsyncSession,
     name: str,
