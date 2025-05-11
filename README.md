@@ -92,12 +92,15 @@ Accede a la documentación completa en:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-## Notas del Autor
+## 📝 Notas del Autor
 
 Este proyecto fue desarrollado como parte del curso PyKedex de DruidCode, con el objetivo de aprender:
 - Desarrollo de APIs con FastAPI
 - Operaciones asíncronas con bases de datos
 - Patrones de diseño para aplicaciones web
 - Sistemas de batallas por turnos
+- Buenas prácticas de desarrollo profesional
+- Arquitectura escalable para futuras expansiones
+- Documentación exhaustiva para facilitar contribuciones
 
 **¡Atrapa todos los endpoints!**
