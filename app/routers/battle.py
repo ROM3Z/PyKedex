@@ -11,6 +11,58 @@ router = APIRouter(
     tags=["battles"]
 )
 
+# Sistema de ventajas por tipo (basado en las mecánicas de Pokémon)
+TYPE_ADVANTAGES = {
+    "Planta": {"Agua": 2.0, "Roca": 2.0, "Tierra": 2.0},
+    "Fuego": {"Planta": 2.0, "Bicho": 2.0, "Hielo": 2.0, "Acero": 2.0},
+    "Agua": {"Fuego": 2.0, "Roca": 2.0, "Tierra": 2.0},
+    "Eléctrico": {"Agua": 2.0, "Volador": 2.0},
+    "Hielo": {"Planta": 2.0, "Tierra": 2.0, "Volador": 2.0, "Dragón": 2.0},
+    "Lucha": {"Normal": 2.0, "Hielo": 2.0, "Roca": 2.0, "Siniestro": 2.0, "Acero": 2.0},
+    "Veneno": {"Planta": 2.0, "Hada": 2.0},
+    "Tierra": {"Fuego": 2.0, "Eléctrico": 2.0, "Veneno": 2.0, "Roca": 2.0, "Acero": 2.0},
+    "Volador": {"Planta": 2.0, "Lucha": 2.0, "Bicho": 2.0},
+    "Psíquico": {"Lucha": 2.0, "Veneno": 2.0},
+    "Bicho": {"Planta": 2.0, "Psíquico": 2.0, "Siniestro": 2.0},
+    "Roca": {"Fuego": 2.0, "Hielo": 2.0, "Volador": 2.0, "Bicho": 2.0},
+    "Fantasma": {"Psíquico": 2.0, "Fantasma": 2.0},
+    "Dragón": {"Dragón": 2.0},
+    "Siniestro": {"Psíquico": 2.0, "Fantasma": 2.0},
+    "Acero": {"Hielo": 2.0, "Roca": 2.0, "Hada": 2.0},
+    "Hada": {"Lucha": 2.0, "Dragón": 2.0, "Siniestro": 2.0},
+    # Debilidades (0.5 de daño)
+    "Planta": {"Fuego": 0.5, "Volador": 0.5, "Bicho": 0.5, "Hielo": 0.5, "Veneno": 0.5},
+    "Fuego": {"Agua": 0.5, "Roca": 0.5, "Tierra": 0.5},
+    "Agua": {"Eléctrico": 0.5, "Planta": 0.5},
+    "Eléctrico": {"Tierra": 0.5},
+    "Hielo": {"Fuego": 0.5, "Lucha": 0.5, "Roca": 0.5, "Acero": 0.5},
+    "Lucha": {"Volador": 0.5, "Psíquico": 0.5, "Hada": 0.5},
+    "Veneno": {"Tierra": 0.5, "Psíquico": 0.5},
+    "Tierra": {"Agua": 0.5, "Planta": 0.5, "Hielo": 0.5},
+    "Volador": {"Eléctrico": 0.5, "Hielo": 0.5, "Roca": 0.5},
+    "Psíquico": {"Bicho": 0.5, "Fantasma": 0.5, "Siniestro": 0.5},
+    "Bicho": {"Fuego": 0.5, "Volador": 0.5, "Roca": 0.5},
+    "Roca": {"Agua": 0.5, "Planta": 0.5, "Lucha": 0.5, "Tierra": 0.5, "Acero": 0.5},
+    "Fantasma": {"Fantasma": 0.5, "Siniestro": 0.5},
+    "Dragón": {"Acero": 0.5},
+    "Siniestro": {"Lucha": 0.5, "Bicho": 0.5, "Hada": 0.5},
+    "Acero": {"Fuego": 0.5, "Lucha": 0.5, "Tierra": 0.5},
+    "Hada": {"Veneno": 0.5, "Acero": 0.5}
+}
+
+def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
+    """Calcula el multiplicador de daño basado en los tipos"""
+    multiplier = 1.0
+    attacker_types = attacker_type.split("/")
+    defender_types = defender_type.split("/")
+    
+    for atk_type in attacker_types:
+        for def_type in defender_types:
+            if atk_type in TYPE_ADVANTAGES and def_type in TYPE_ADVANTAGES[atk_type]:
+                multiplier *= TYPE_ADVANTAGES[atk_type][def_type]
+    
+    return multiplier
+
 def get_random_attack(pokemon: schemas.Pokemon) -> str:
     """Obtiene un ataque aleatorio de los movimientos del Pokémon"""
     if pokemon.moves:
@@ -20,11 +72,21 @@ def get_random_attack(pokemon: schemas.Pokemon) -> str:
     default_attacks = ["Placaje", "Lanzallamas", "Rayo Solar", "Hidrobomba", "Impactrueno"]
     return random.choice(default_attacks)
 
-def calculate_damage(attacker: schemas.Pokemon, defender: schemas.Pokemon) -> int:
-    """Calcula el daño considerando ataque y defensa"""
+def calculate_damage(attacker: schemas.Pokemon, defender: schemas.Pokemon, attack_used: str) -> int:
+    """Calcula el daño considerando ataque, defensa y ventaja por tipo"""
+    # Daño base aleatorio entre 1 y el ataque del Pokémon
     base_damage = random.randint(1, attacker.attack or 10)
+    
+    # Factor de defensa (reduce el daño)
     defense_factor = max(1, (defender.defense or 10) / 100)
-    return max(1, int(base_damage / defense_factor))
+    
+    # Ventaja por tipo
+    type_multiplier = get_type_multiplier(attacker.element, defender.element)
+    
+    # Daño final con todos los factores
+    final_damage = max(1, int((base_damage * type_multiplier) / defense_factor))
+    
+    return final_damage
 
 async def simulate_battle(
     db: AsyncSession, 
@@ -70,11 +132,20 @@ async def simulate_battle(
     while trainer_hp > 0 and opponent_hp > 0:
         # Turno del entrenador
         last_trainer_attack = get_random_attack(trainer_pokemon)
-        damage = calculate_damage(trainer_pokemon, opponent_pokemon)
+        damage = calculate_damage(trainer_pokemon, opponent_pokemon, last_trainer_attack)
         opponent_hp -= damage
+        
+        # Verificar ventaja de tipo
+        type_multiplier = get_type_multiplier(trainer_pokemon.element, opponent_pokemon.element)
+        type_message = ""
+        if type_multiplier > 1.5:
+            type_message = " ¡Es muy efectivo!"
+        elif type_multiplier < 0.5:
+            type_message = " ¡No es muy efectivo..."
+        
         battle_log.append(
             f"{trainer_pokemon.name} usa {last_trainer_attack} contra {opponent_pokemon.name} "
-            f"y causa {damage} de daño"
+            f"y causa {damage} de daño{type_message}"
         )
         
         if opponent_hp <= 0:
@@ -83,17 +154,26 @@ async def simulate_battle(
             
         # Turno del oponente
         last_opponent_attack = get_random_attack(opponent_pokemon)
-        damage = calculate_damage(opponent_pokemon, trainer_pokemon)
+        damage = calculate_damage(opponent_pokemon, trainer_pokemon, last_opponent_attack)
         trainer_hp -= damage
+        
+        # Verificar ventaja de tipo
+        type_multiplier = get_type_multiplier(opponent_pokemon.element, trainer_pokemon.element)
+        type_message = ""
+        if type_multiplier > 1.5:
+            type_message = " ¡Es muy efectivo!"
+        elif type_multiplier < 0.5:
+            type_message = " ¡No es muy efectivo..."
+        
         battle_log.append(
             f"{opponent_pokemon.name} usa {last_opponent_attack} contra {trainer_pokemon.name} "
-            f"y causa {damage} de daño"
+            f"y causa {damage} de daño{type_message}"
         )
         
         if trainer_hp <= 0:
             battle_log.append(f"¡{trainer_pokemon.name} se debilitó!")
     
-    # Determinar resultados
+    # Determinar resultados (el resto del código permanece igual)
     if trainer_hp > 0 and opponent_hp <= 0:
         winner_name = trainer.name
         winner_id = trainer.id
@@ -158,6 +238,7 @@ async def simulate_battle(
         last_opponent_attack=last_opponent_attack
     )
 
+# Los endpoints permanecen iguales
 @router.post("/", response_model=schemas.BattleResult)
 async def create_battle(
     battle: schemas.BattleCreate, 
@@ -179,7 +260,6 @@ async def read_battle(
     if db_battle is None:
         raise HTTPException(status_code=404, detail="Batalla no encontrada")
     
-    # Asegurar que los nombres estén incluidos
     if not hasattr(db_battle, 'trainer_name'):
         trainer = await crud.get_trainer(db, db_battle.trainer_id)
         db_battle.trainer_name = trainer.name if trainer else "Desconocido"
@@ -198,7 +278,6 @@ async def read_battles(
 ):
     battles = await crud.get_battles(db, skip=skip, limit=limit)
     
-    # Añadir nombres a cada batalla
     for battle in battles:
         if not hasattr(battle, 'trainer_name'):
             trainer = await crud.get_trainer(db, battle.trainer_id)
