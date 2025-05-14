@@ -6,9 +6,28 @@ from sqlalchemy.orm import selectinload, joinedload
 from datetime import datetime, timezone
 from typing import List, Optional
 
+# Importaciones de SQLAlchemy para operaciones síncronas
+from sqlalchemy.orm import Session
+from app.models import Admin
+from app.schemas import AdminCreate
+from app.routers.auth import get_password_hash
+
 # Importaciones de nuestros módulos internos
 from . import schemas  # Esquemas Pydantic para validación de datos
 from . import models  # Modelos de la base de datos
+
+# Funciones CRUD para administradores
+async def get_admin_by_username(db: AsyncSession, username: str):
+    result = await db.execute(select(Admin).where(Admin.username == username))
+    return result.scalars().first()
+
+async def create_admin(db: AsyncSession, admin_data: dict):
+    db_admin = Admin(**admin_data)
+    db.add(db_admin)
+    await db.commit()
+    await db.refresh(db_admin)
+    return db_admin
+
 
 # Función auxiliar para parsear movimientos de Pokémon
 def parse_moves(moves):

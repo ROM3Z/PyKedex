@@ -3,6 +3,24 @@ from typing import List, Optional
 from pydantic import BaseModel, EmailStr  # BaseModel para esquemas, EmailStr para validación de email
 from datetime import datetime
 
+class AdminBase(BaseModel):
+    username: str
+    email: EmailStr
+
+class AdminCreate(AdminBase):
+    password: str
+
+class Admin(AdminBase):
+    id: int
+    is_active: bool
+    is_superadmin: bool
+
+    class Config:
+        from_attributes = True
+
+class AdminInDB(Admin):
+    hashed_password: str
+
 ## ------------------------- ESQUEMAS PARA POKÉMON ------------------------- ##
 
 class PokemonBase(BaseModel):

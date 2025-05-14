@@ -4,6 +4,17 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime
 from .database import Base
 
+
+class Admin(Base):
+    __tablename__ = "admins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    email = Column(String, unique=True, index=True)
+    is_active = Column(Boolean, default=True)
+    is_superadmin = Column(Boolean, default=False)
+
 class Pokemon(Base):
     """
     Modelo que representa un Pokémon en la base de datos.

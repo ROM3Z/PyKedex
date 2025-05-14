@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Depends
 from app.database import engine, Base
-from app.routers import pokemon, trainer, battle
+from app.routers import pokemon, trainer, battle, auth, admin
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi import HTTPException
@@ -8,6 +8,10 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from app.initial_data import create_initial_admin
+from fastapi.openapi.utils import get_openapi
+from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel, SecurityScheme as SecuritySchemeModel
+from fastapi.security import OAuth2PasswordBearer
 
 # --------------------------------------------------
 # CONFIGURACIÓN DEL RATE LIMITER
@@ -18,6 +22,9 @@ limiter = Limiter(key_func=get_remote_address)
 # --------------------------------------------------
 # CONFIGURACIÓN DE LA APLICACIÓN
 # --------------------------------------------------
+
+# Crear el esquema OAuth2 para usar Bearer tokens
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 app = FastAPI(
     title="PyKedex API",
@@ -37,6 +44,12 @@ app.add_middleware(SlowAPIMiddleware)
 
 # Configura el rate limiter
 app.state.limiter = limiter
+
+# Evento de startup para crear admin inicial
+@app.on_event("startup")
+async def startup_event():
+    await create_initial_admin()
+    print("✔ Verificado/Creado administrador inicial")
 
 # --------------------------------------------------
 # MANEJADOR DE ERRORES PARA RATE LIMIT
@@ -59,6 +72,20 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 # --------------------------------------------------
 # REGISTRO DE ROUTERS CON RATE LIMITING
 # --------------------------------------------------
+
+admin.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="admin"))]
+app.include_router(
+    admin.router,
+    prefix="/api/v1/admin",
+    tags=["admin"]
+)
+
+auth.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="auth"))]
+app.include_router(
+    auth.router,
+    prefix="/api/v1/auth",
+    tags=["auth"]
+)
 
 # Router de Pokémon con rate limiting
 pokemon.router.dependencies = [Depends(limiter.shared_limit("10/minute", scope="pokemon"))]
@@ -131,3 +158,30 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": type(exc).__name__
         }
     )
+
+# Personalización de OpenAPI para incluir el esquema de seguridad globalmente
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT"
+        }
+    }
+    # Aplica BearerAuth globalmente a todos los endpoints
+    for path in openapi_schema["paths"].values():
+        for operation in path.values():
+            operation["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+# Cambiar el OpenAPI de FastAPI para que use Bearer Token por defecto
+app.openapi = custom_openapi
