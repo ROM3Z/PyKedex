@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.initial_data import create_initial_admin
 from fastapi.openapi.utils import get_openapi
 from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel, SecurityScheme as SecuritySchemeModel
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer
 
 # --------------------------------------------------
 # CONFIGURACIÓN DEL RATE LIMITER
@@ -24,7 +24,7 @@ limiter = Limiter(key_func=get_remote_address)
 # --------------------------------------------------
 
 # Crear el esquema OAuth2 para usar Bearer tokens
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+bearer_scheme = HTTPBearer()
 
 app = FastAPI(
     title="PyKedex API",
@@ -163,12 +163,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
+    
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
+    
+    # Define solo el esquema Bearer sin OAuth2
     openapi_schema["components"]["securitySchemes"] = {
         "BearerAuth": {
             "type": "http",
@@ -176,12 +179,6 @@ def custom_openapi():
             "bearerFormat": "JWT"
         }
     }
-    # Aplica BearerAuth globalmente a todos los endpoints
-    for path in openapi_schema["paths"].values():
-        for operation in path.values():
-            operation["security"] = [{"BearerAuth": []}]
+    
     app.openapi_schema = openapi_schema
     return app.openapi_schema
-
-# Cambiar el OpenAPI de FastAPI para que use Bearer Token por defecto
-app.openapi = custom_openapi

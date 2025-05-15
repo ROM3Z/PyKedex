@@ -1,106 +1,124 @@
-# PyKedex - API Pokémon con FastAPI
+# PyKedex - API Pokémon con FastAPI 🚀
 
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.68.0-green.svg)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens)
 
-**Autor:** Isaac Rodríguez ROMEZ  
-**Desarrollado para:** Curso PyKedex de DruidCode
+API REST inspirada en Pokémon construida con FastAPI, PostgreSQL y autenticación JWT. Desarrollado como proyecto educativo para el curso PyKedex de DruidCode.
 
-## Descripción del Proyecto
+## Características ✨
 
-PyKedex es una API RESTful inspirada en el universo Pokémon, diseñada como proyecto educativo para el curso de DruidCode. Implementa un sistema completo para gestionar entrenadores, pokémons y simular emocionantes batallas.
-
-## Características Técnicas
-
-- **Arquitectura**: API REST con FastAPI
-- **Base de Datos**: PostgreSQL con SQLAlchemy ORM
-- **Autenticación**: JWT (próximamente)
-- **Operaciones CRUD** completas para todos los modelos
-- **Sistema de batallas** por turnos con cálculo de daño
+- **Operaciones CRUD completas** para Pokémon, Entrenadores y Batallas
+- **Autenticación JWT** con roles de admin/superadmin
+- **Sistema de batallas por turnos** con cálculo de daño
+- **Operaciones asíncronas** con SQLAlchemy y PostgreSQL
 - **Documentación automática** con Swagger UI y ReDoc
+- **Preparado para producción** con seguridad y validaciones
 
-## Estructura del Código
+## Estructura del Proyecto 📂
 
 ```
 app/
-├── crud.py          # Operaciones de base de datos
-├── database.py      # Configuración de DB
-├── models.py        # Modelos SQLAlchemy
-├── schemas.py       # Esquemas Pydantic
 ├── routers/
-│   ├── pokemon.py   # Endpoints de Pokémon
-│   ├── trainer.py   # Endpoints de Entrenadores
-│   └── battle.py    # Lógica de batallas
-└── main.py          # Aplicación principal
+│   ├── admin.py       # Endpoints de administración
+│   ├── auth.py        # Autenticación JWT
+│   ├── battle.py      # Lógica de batallas
+│   ├── pokemon.py     # Endpoints de Pokémon
+│   └── trainer.py     # Endpoints de Entrenadores
+├── crud.py            # Operaciones de base de datos
+├── database.py        # Configuración de DB
+├── initial_data.py    # Cargador de datos iniciales
+├── main.py            # Aplicación principal
+├── models.py          # Modelos SQLAlchemy
+└── schemas.py         # Esquemas Pydantic
 ```
 
-## Ejemplos de Uso
+## Instalación ⚙️
 
-### Crear un Pokémon
-```python
+1. Clona el repositorio:
+```bash
+git clone https://github.com/tuusuario/pykedex-api.git
+cd pykedex-api
+```
+
+2. Instala las dependencias:
+```bash
+pip install -r requirements.txt
+```
+
+3. Configura las variables de entorno en `.env`:
+```ini
+DATABASE_URL=postgresql+asyncpg://usuario:contraseña@localhost:5432/pykedex
+SECRET_KEY=tu-clave-secreta-aqui
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+4. Ejecuta la aplicación:
+```bash
+uvicorn app.main:app --reload
+```
+
+## Documentación de la API 📚
+
+Una vez en funcionamiento, accede a la documentación interactiva:
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+## Ejemplos de Uso 🎮
+
+### Autenticación
+```http
+POST /token
+Content-Type: application/json
+
+{
+    "username": "admin",
+    "password": "secreto"
+}
+```
+
+### Crear un Pokémon (requiere autenticación)
+```http
 POST /pokemons
+Authorization: Bearer <tu-token>
+Content-Type: application/json
+
 {
     "name": "Pikachu",
     "element": "Eléctrico",
     "hp": 35,
     "attack": 55,
     "defense": 40,
-    "moves": ["Impactrueno", "Rayo", "Ataque Rápido"]
+    "moves": ["Impactrueno", "Ataque Rápido"]
 }
 ```
 
 ### Simular una Batalla
-```python
+```http
 POST /battles
+Authorization: Bearer <tu-token>
+Content-Type: application/json
+
 {
     "trainer_id": 1,
     "opponent_id": 2
 }
-
-# Respuesta de ejemplo
-{
-    "winner_name": "Ash",
-    "battle_log": [
-        "Pikachu ataca a Squirtle y causa 12 de daño",
-        "Squirtle ataca a Pikachu y causa 8 de daño",
-        "¡Squirtle se debilitó!"
-    ]
-}
 ```
 
-## Requisitos e Instalación
+## Contribuciones 🤝
 
-1. Instalar dependencias:
-```bash
-pip install -r requirements.txt
-```
+¡Las contribuciones son bienvenidas! Abre un issue o envía un pull request.
 
-2. Configurar PostgreSQL en `.env`:
-```
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/pykedex
-```
+## Licencia 📜
 
-3. Ejecutar la aplicación:
-```bash
-uvicorn app.main:app --reload
-```
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
 
-## Documentación Interactiva
+---
 
-Accede a la documentación completa en:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+**Desarrollado por Isaac Rodríguez ROMEZ**  
+**Para el Curso PyKedex de DruidCode**  
 
-## 📝 Notas del Autor
-
-Este proyecto fue desarrollado como parte del curso PyKedex de DruidCode, con el objetivo de aprender:
-- Desarrollo de APIs con FastAPI
-- Operaciones asíncronas con bases de datos
-- Patrones de diseño para aplicaciones web
-- Sistemas de batallas por turnos
-- Buenas prácticas de desarrollo profesional
-- Arquitectura escalable para futuras expansiones
-- Documentación exhaustiva para facilitar contribuciones
-
-**¡Atrapa todos los endpoints!**
+"¡Atrápalos ya!" - Pokémon

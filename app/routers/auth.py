@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
@@ -23,12 +23,13 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
+class LoginForm(BaseModel):
+    username: str
+    password: str
 
 # Utilidades
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
+bearer_scheme = HTTPBearer()
 
 # Función para verificar contraseña
 def verify_password(plain_password: str, hashed_password: str):
@@ -66,7 +67,7 @@ async def authenticate_admin(
 # Endpoint para obtener token
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    form_data: LoginForm,
     db: AsyncSession = Depends(get_db)
 ):
     admin = await authenticate_admin(form_data.username, form_data.password, db)
@@ -84,7 +85,7 @@ async def login_for_access_token(
 
 # Dependencia para obtener el admin actual
 async def get_current_admin(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db)
 ):
     credentials_exception = HTTPException(
@@ -93,19 +94,19 @@ async def get_current_admin(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
+        
+        from app.crud import get_admin_by_username
+        admin = await get_admin_by_username(db, username=username)
+        if admin is None:
+            raise credentials_exception
+        return admin
     except JWTError:
         raise credentials_exception
-    
-    from app.crud import get_admin_by_username
-    admin = await get_admin_by_username(db, username=token_data.username)
-    if admin is None:
-        raise credentials_exception
-    return admin
 
 # Dependencia para obtener admin superusuario
 async def get_current_superadmin(

@@ -3,6 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, or_
 from typing import List, Optional
 from difflib import get_close_matches
+
+from app.schemas import Admin
+from app.routers.auth import get_current_superadmin, get_current_admin
+
 import unicodedata
 import re
 
@@ -65,7 +69,8 @@ def find_similar_names(search_term: str, names: List[str], threshold: float = 0.
 @router.post("/", response_model=schemas.Pokemon)
 async def create_pokemon(
     pokemon: schemas.PokemonCreate, 
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Crea un nuevo Pokémon en la base de datos.
@@ -84,7 +89,8 @@ async def read_pokemons(
     skip: int = 0, 
     limit: int = 10,
     name: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Obtiene un listado paginado de Pokémon.
@@ -142,7 +148,8 @@ async def flexible_pokemon_search(
     search_term: str,
     skip: int = 0,
     limit: int = 10,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Búsqueda inteligente con tolerancia a errores ortográficos.
