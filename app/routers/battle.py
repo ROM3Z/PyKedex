@@ -77,24 +77,35 @@ def get_random_attack(pokemon: schemas.Pokemon) -> str:
         return random.choice(pokemon.moves)
     return random.choice(["Placaje", "Arañazo", "Gruñido"])
 
-def calculate_damage(attacker: schemas.Pokemon, defender: schemas.Pokemon, attack_used: str) -> int:
+def calculate_damage(
+    attacker: schemas.Pokemon, 
+    defender: schemas.Pokemon, 
+    attack_used: str,
+    attacker_level: int = 1,
+    defender_level: int = 1
+) -> int:
     """
     Calcula el daño de un ataque considerando:
     - Ataque/Defensa base
     - Ventaja de tipo
+    - Nivel del entrenador
     - Aleatoriedad
     """
     # Daño base con variación aleatoria
     base_damage = random.randint(5, attacker.attack or 15)
     
-    # Reducción por defensa
-    defense_factor = max(1, (defender.defense or 10) / 10)
+    # Bonus por nivel del entrenador (1-10% por nivel)
+    level_bonus = 1 + (attacker_level * 0.01)
+    base_damage = int(base_damage * level_bonus)
+    
+    # Reducción por defensa y nivel del oponente
+    defense_level_reduction = max(1, (defender.defense or 10) / (10 * (1 + defender_level * 0.005)))
     
     # Multiplicador por tipo
     type_multiplier = get_type_multiplier(attacker.element or "Normal", defender.element or "Normal")
     
     # Daño final
-    damage = max(1, int((base_damage * type_multiplier) / defense_factor))
+    damage = max(1, int((base_damage * type_multiplier) / defense_level_reduction))
     
     # Ataques especiales tienen bonus
     if "especial" in attack_used.lower():
@@ -140,6 +151,12 @@ async def simulate_battle(
     trainer_hp = trainer_pokemon.current_hp or trainer_pokemon.hp or 100
     opponent_hp = opponent_pokemon.current_hp or opponent_pokemon.hp or 100
     
+    # Obtener niveles de los entrenadores y daño
+    trainer_level = trainer.level if hasattr(trainer, 'level') else 1
+    opponent_level = opponent.level if hasattr(opponent, 'level') else 1
+    total_trainer_damage = 0
+    total_opponent_damage = 0
+    
     # Registro de batalla
     battle_log = []
     last_trainer_attack = ""
@@ -149,9 +166,16 @@ async def simulate_battle(
     while trainer_hp > 0 and opponent_hp > 0:
         # Turno del entrenador
         last_trainer_attack = get_random_attack(trainer_pokemon)
-        damage = calculate_damage(trainer_pokemon, opponent_pokemon, last_trainer_attack)
+        damage = calculate_damage(
+            trainer_pokemon, 
+            opponent_pokemon, 
+            last_trainer_attack,
+            trainer_level,
+            opponent_level
+        )
         opponent_hp -= damage
-        
+        total_trainer_damage = damage
+
         type_multiplier = get_type_multiplier(
             trainer_pokemon.element or "Normal", 
             opponent_pokemon.element or "Normal"
@@ -165,7 +189,7 @@ async def simulate_battle(
         
         battle_log.append(
             f"{trainer.name}: {trainer_pokemon.name} usa {last_trainer_attack} "
-            f"contra {opponent_pokemon.name} (-{damage} HP){type_message}"
+            f"contra {opponent_pokemon.name} -{opponent_hp} HP, Daño: -{total_trainer_damage}{type_message}"
         )
         
         if opponent_hp <= 0:
@@ -174,9 +198,17 @@ async def simulate_battle(
             
         # Turno del oponente
         last_opponent_attack = get_random_attack(opponent_pokemon)
-        damage = calculate_damage(opponent_pokemon, trainer_pokemon, last_opponent_attack)
-        trainer_hp -= damage
+        damage = calculate_damage(
+            opponent_pokemon, 
+            trainer_pokemon, 
+            last_opponent_attack,
+            opponent_level,
+            trainer_level
+        )
         
+        trainer_hp -= damage
+        total_opponent_damage = damage
+
         type_multiplier = get_type_multiplier(
             opponent_pokemon.element or "Normal", 
             trainer_pokemon.element or "Normal"
@@ -190,7 +222,7 @@ async def simulate_battle(
         
         battle_log.append(
             f"{opponent.name}: {opponent_pokemon.name} usa {last_opponent_attack} "
-            f"contra {trainer_pokemon.name} (-{damage} HP){type_message}"
+            f"contra {trainer_pokemon.name} -{trainer_hp} HP, Daño: -{total_opponent_damage}{type_message}"
         )
         
         if trainer_hp <= 0:
@@ -201,10 +233,41 @@ async def simulate_battle(
         winner_name = trainer.name
         winner_id = trainer.id
         loser_name = opponent.name
+        
+        # Sistema de subida de nivel (10% de probabilidad por batalla ganada)
+        if random.random() < 0.10:  # 10% de chance
+            if trainer.level < 10:  # Nivel máximo 10
+                new_level = trainer.level + 1
+                updated_trainer = schemas.TrainerCreate(
+                    name=trainer.name,
+                    email=trainer.email,  # Mantenemos el email actual
+                    level=new_level
+                )
+                await crud.update_trainer(db, trainer_id, updated_trainer)
+                battle_log.append(
+                    f"¡{trainer.name} ha subido al nivel {new_level}! "
+                    f"Sus Pokémon serán más fuertes en futuras batallas."
+                )
+                
     elif opponent_hp > 0 and trainer_hp <= 0:
         winner_name = opponent.name
         winner_id = opponent.id
         loser_name = trainer.name
+        
+        # Sistema de subida de nivel para el oponente
+        if random.random() < 0.10:  # 10% de chance
+            if opponent.level < 10:  # Nivel máximo 10
+                new_level = opponent.level + 1
+                updated_opponent = schemas.TrainerCreate(
+                    name=opponent.name,
+                    email=opponent.email,  # Mantenemos el email actual
+                    level=new_level
+                )
+                await crud.update_trainer(db, opponent_id, updated_opponent)
+                battle_log.append(
+                    f"¡{opponent.name} ha subido al nivel {new_level}! "
+                    f"Sus Pokémon serán más fuertes en futuras batallas."
+                )
     else:
         winner_name = "Empate"
         winner_id = None
