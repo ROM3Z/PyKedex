@@ -86,8 +86,6 @@ async def create_pokemon(
 
 @router.get("/", response_model=List[schemas.Pokemon])
 async def read_pokemons(
-    skip: int = 0, 
-    limit: int = 10,
     name: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
@@ -104,14 +102,12 @@ async def read_pokemons(
     Returns:
         Lista de Pokémon paginados
     """
-    pokemons = await crud.get_pokemons(db, skip=skip, limit=limit, name=name)
+    pokemons = await crud.get_pokemons(db,name=name)
     return pokemons
 
 @router.get("/search/", response_model=List[schemas.Pokemon])
 async def search_pokemons_by_name(
     name: str,
-    skip: int = 0,
-    limit: int = 10,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -135,7 +131,7 @@ async def search_pokemons_by_name(
         GET /pokemon/search/?name=pika
         Encontrará "Pikachu", "Pikachu Gigamax", etc.
     """
-    pokemons = await crud.search_pokemons_by_name(db, name=name, skip=skip, limit=limit)
+    pokemons = await crud.search_pokemons_by_name(db, name=name)
     if not pokemons:
         raise HTTPException(
             status_code=404,
@@ -146,8 +142,6 @@ async def search_pokemons_by_name(
 @router.get("/flexible-search/", response_model=List[schemas.Pokemon])
 async def flexible_pokemon_search(
     search_term: str,
-    skip: int = 0,
-    limit: int = 10,
     db: AsyncSession = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):
@@ -178,17 +172,17 @@ async def flexible_pokemon_search(
         return [exact_match]
     
     # Capa 2: Coincidencia aproximada
-    all_pokemons = await crud.get_pokemons(db, skip=0, limit=None)
+    all_pokemons = await crud.get_pokemons(db,)
     all_names = [p.name for p in all_pokemons]
     
     similar_names = find_similar_names(search_term, all_names)
     if similar_names:
-        pokemons = await crud.get_pokemons_by_names(db, similar_names, skip, limit)
+        pokemons = await crud.get_pokemons_by_names(db, similar_names)
         if pokemons:
             return pokemons
     
     # Capa 3: Búsqueda por subcadena
-    pokemons = await crud.search_pokemons_by_name(db, name=search_term, skip=skip, limit=limit)
+    pokemons = await crud.search_pokemons_by_name(db, name=search_term)
     if not pokemons:
         raise HTTPException(
             status_code=404,

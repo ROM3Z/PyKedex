@@ -10,7 +10,6 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from app.initial_data import create_initial_admin
 from fastapi.openapi.utils import get_openapi
-from fastapi.openapi.models import OAuthFlows as OAuthFlowsModel, SecurityScheme as SecuritySchemeModel
 from fastapi.security import HTTPBearer
 
 # --------------------------------------------------

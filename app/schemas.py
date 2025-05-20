@@ -1,7 +1,6 @@
 # Importaciones necesarias
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr  # BaseModel para esquemas, EmailStr para validación de email
-from datetime import datetime
 
 class AdminBase(BaseModel):
     username: str
@@ -38,6 +37,7 @@ class PokemonBase(BaseModel):
     speed: Optional[int] = None  # Velocidad en combate
     moves: Optional[List[str]] = None  # Lista de movimientos disponibles
     current_hp: Optional[int] = None  # HP actual (para combates)
+    level: Optional[int] = 1  # Nivel del Pokémon (nuevo campo con valor por defecto 1)
 
 class PokemonCreate(PokemonBase):
     """
@@ -55,7 +55,11 @@ class Pokemon(PokemonBase):
 
     class Config:
         orm_mode = True  # Permite la conversión automática desde ORM de SQLAlchemy
-
+        
+class PokemonUpdate(BaseModel):
+    current_hp: int | None = None
+    level: int | None = None
+    # Agrega aquí otros campos que necesites actualizar
 ## ------------------------- ESQUEMAS PARA ENTRENADORES ------------------------- ##
 
 class TrainerBase(BaseModel):
@@ -190,18 +194,21 @@ class BattleResult(BaseModel):
     Esquema para el resultado detallado de una batalla.
     Contiene información completa para mostrar el desarrollo del combate.
     """
-    battle_id: int  # ID de la batalla
-    winner_id: Optional[int] = None  # ID del entrenador ganador
-    winner_name: str  # Nombre del ganador
-    loser_name: str  # Nombre del perdedor
-    trainer_pokemon: Pokemon  # Pokémon del entrenador
-    opponent_pokemon: Pokemon  # Pokémon del oponente
-    trainer_hp_remaining: int  # HP restante del Pokémon del entrenador
-    opponent_hp_remaining: int  # HP restante del Pokémon del oponente
-    battle_log: List[str]  # Historial de acciones durante la batalla
-    last_trainer_attack: str  # Último ataque usado por el entrenador
-    last_opponent_attack: str  # Último ataque usado por el oponente
-
+    battle_id: int
+    winner_id: Optional[int]
+    winner_name: str
+    loser_name: str
+    trainer_pokemon: Pokemon
+    opponent_pokemon: Pokemon
+    trainer_hp_remaining: int
+    opponent_hp_remaining: int
+    battle_log: List[str]
+    last_trainer_attack: Optional[str] = None  # Hacer opcional o proporcionar valor por defecto
+    last_opponent_attack: Optional[str] = None
+    trainer_wins: int
+    opponent_wins: int
+    is_best_of_three: bool
+    keep_winner_pokemon: bool # Indica si se mantiene el Pokémon ganador para la siguiente batalla
 ## ------------------------- MANEJO DE REFERENCIAS CIRCULARES ------------------------- ##
 
 # Resuelve referencias circulares entre esquemas que se referencian mutuamente

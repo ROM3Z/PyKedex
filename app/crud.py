@@ -66,8 +66,6 @@ async def get_pokemon(db: AsyncSession, pokemon_id: int):
 
 async def get_pokemons(
     db: AsyncSession, 
-    skip: int = 0, 
-    limit: int = 10,
     name: Optional[str] = None
 ):
     """
@@ -87,8 +85,6 @@ async def get_pokemons(
     if name:
         query = query.where(
             func.lower(models.Pokemon.name).contains(func.lower(name)))
-    
-    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return result.scalars().all()
 
@@ -100,21 +96,17 @@ async def get_pokemon_by_name(db: AsyncSession, name: str):
     )
     return result.scalars().first()
 
-async def get_pokemons_by_names(db: AsyncSession, names: List[str], skip: int = 0, limit: int = 10):
+async def get_pokemons_by_names(db: AsyncSession, names: List[str]):
     """Busca Pokémon por lista de nombres exactos"""
     result = await db.execute(
         select(models.Pokemon)
         .where(models.Pokemon.name.in_(names))
-        .offset(skip)
-        .limit(limit)
     )
     return result.scalars().all()
 
 async def search_pokemons_by_name(
     db: AsyncSession,
     name: str,
-    skip: int = 0,
-    limit: int = 10
 ) -> List[models.Pokemon]:
     """
     Búsqueda avanzada por nombre con:
@@ -145,8 +137,7 @@ async def search_pokemons_by_name(
             # Luego por longitud del nombre (más corto primero)
             func.length(models.Pokemon.name)
         )
-        .offset(skip)
-        .limit(limit)
+        
     )
     
     result = await db.execute(query)

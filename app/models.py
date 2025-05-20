@@ -33,6 +33,7 @@ class Pokemon(Base):
     speed = Column(Integer)  # Velocidad
     moves = Column(ARRAY(String))  # Lista de movimientos disponibles
     current_hp = Column(Integer)  # HP actual (para combates en curso)
+    level = Column(Integer, default=1)  # Nivel del Pokémon (nuevo campo)
 
     # Relación muchos-a-muchos con entrenadores (a través de TrainerPokemon)
     trainer_pokemons = relationship("TrainerPokemon", back_populates="pokemon")
