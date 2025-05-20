@@ -1,11 +1,27 @@
-fastapi==0.68.1
-uvicorn==0.15.0
-python-dotenv==0.19.0
-psycopg2-binary==2.9.3
-sqlalchemy==1.4.32
-python-multipart==0.0.5
-fuzzywuzzy>=0.18.0
-python-Levenshtein>=0.12.2
-fastapi-cache2>=0.2.0
-slowapi==0.1.7
-limits==3.1.0
+# Core FastAPI y ASGI
+fastapi==0.110.1
+uvicorn==0.29.0
+python-dotenv==1.0.1
+
+# Base de datos (PostgreSQL)
+sqlalchemy==2.0.29
+psycopg2-binary==2.9.9
+asyncpg==0.29.0  # Opcional, solo si usas async/await con PostgreSQL
+
+# Utilidades
+python-multipart==0.0.9
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.12.2
+fastapi-cache2==0.2.5
+slowapi==0.1.8
+limits==3.7.0
+
+# Dependencias de Pydantic (requeridas por FastAPI)
+pydantic==2.7.1
+pydantic_core==2.18.2
+email-validator==2.1.1
+
+# Autenticación JWT y seguridad
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
