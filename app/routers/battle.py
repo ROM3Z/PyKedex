@@ -106,11 +106,18 @@ TRAINER_DIALOGUES = {
         "¡Confío en ti, {pokemon}!",
         "¡Hagámoslo, {pokemon}!",
         "¡A dar lo mejor, {pokemon}!"
+    ],
+    "x4_damage": [
+        "¡Un golpe devastador! ¡Es muy efectivo!",
+        "¡Impacto crítico! ¡El tipo es perfecto!",
+        "¡{pokemon} es extremadamente vulnerable a este ataque!",
+        "¡Golpe maestro! ¡El daño es enorme!",
+        "¡{pokemon} no puede soportar este tipo de ataque!"
     ]
 }
 
 def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
-    """Calcula el multiplicador de daño basado en los tipos"""
+    """Calcula el multiplicador de daño basado en los tipos, incluyendo 4x de daño"""
     multiplier = 1.0
     attacker_types = attacker_type.split("/")
     defender_types = defender_type.split("/")
@@ -120,7 +127,13 @@ def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
             if atk_type in TYPE_ADVANTAGES and def_type in TYPE_ADVANTAGES[atk_type]:
                 multiplier *= TYPE_ADVANTAGES[atk_type][def_type]
 
-    return multiplier
+    # Mensaje especial para daño 4x
+    if multiplier >= 4.0:
+        return multiplier
+    elif multiplier <= 0.25:
+        return multiplier
+    else:
+        return multiplier
 
 # --------------------------------------------------
 # MECÁNICAS DE COMBATE MEJORADAS CON NIVELES
@@ -144,7 +157,7 @@ def calculate_damage(
     """
     Calcula el daño de un ataque considerando:
     - Ataque/Defensa base o Ataque Especial/Defensa Especial
-    - Ventaja de tipo
+    - Ventaja de tipo (incluyendo 4x de daño)
     - Nivel del Pokémon
     - Aleatoriedad
     Retorna: (daño, es_crítico, es_especial, es_resistido)
@@ -167,7 +180,7 @@ def calculate_damage(
     # Reducción por defensa y nivel del defensor (1-1.5% por nivel)
     defense_level_reduction = max(1, defense_stat / (10 * (1 + defender_level * 0.015)))
 
-    # Multiplicador por tipo
+    # Multiplicador por tipo (puede ser 4x o 0.25x)
     type_multiplier = get_type_multiplier(attacker.element or "Normal", defender.element or "Normal")
 
     # Daño final
@@ -343,6 +356,17 @@ async def simulate_single_battle(
         else:
             last_opponent_attack = attack_used
 
+        # Multiplicador de tipo para mensajes especiales
+        type_multiplier = get_type_multiplier(
+            attacker_pokemon.element or "Normal",
+            defender_pokemon.element or "Normal"
+        )
+
+        # Diálogo especial para daño 4x (50% de probabilidad)
+        if type_multiplier >= 4.0 and random.random() < 0.5:
+            dialogue = random.choice(TRAINER_DIALOGUES["x4_damage"]).format(pokemon=defender_pokemon.name)
+            battle_log.append(f"🗣️ {attacker_name}: {dialogue}")
+
         # Diálogo para golpe crítico o resistencia (50% de probabilidad)
         if (is_critical or resisted) and random.random() < 0.5:
             dialogue_type = "critical" if is_critical else "resisted"
@@ -358,14 +382,13 @@ async def simulate_single_battle(
             trainer_hp = max(0, trainer_hp)
 
         # Mensajes de log
-        type_multiplier = get_type_multiplier(
-            attacker_pokemon.element or "Normal",
-            defender_pokemon.element or "Normal"
-        )
-
         type_message = ""
-        if type_multiplier > 1.5:
+        if type_multiplier >= 4.0:
+            type_message = " ¡Es extremadamente efectivo! (x4)"
+        elif type_multiplier > 1.5:
             type_message = " ¡Es muy efectivo!"
+        elif type_multiplier <= 0.25:
+            type_message = " ¡Casi no afecta... (x0.25)"
         elif type_multiplier < 0.5:
             type_message = " ¡No es muy efectivo..."
 
@@ -488,11 +511,14 @@ async def simulate_battle(
     db: AsyncSession,
     trainer_id: int,
     opponent_id: int,
-    keep_winner_pokemon: bool = True
+    keep_winner_pokemon: bool = True,
+    smart_selection: bool = True
 ) -> schemas.BattleResult:
     """
     Simula una batalla Pokémon completa entre dos entrenadores (mejor de 3)
     con comentarios mejorados, diálogos y resumen MVP.
+    - keep_winner_pokemon: Si True, los Pokémon ganadores permanecen en batalla
+    - smart_selection: Si True, los entrenadores eligen Pokémon estratégicamente
     """
     # Validación de entrenadores
     trainer = await crud.get_trainer(db, trainer_id)
@@ -521,12 +547,60 @@ async def simulate_battle(
     current_trainer_pokemon = None
     current_opponent_pokemon = None
 
+    # Listas para Pokémon derrotados (no pueden volver a ser seleccionados)
+    defeated_trainer_pokemons = set()
+    defeated_opponent_pokemons = set()
+
     # Comentarista de la batalla
     commentator = "¡Esto fue épico! 🌟"
 
     # Mejor de 3 batallas
     for battle_num in range(1, 4):
-        master_battle_log.append(f"\n🔥 BATALLA {battle_num} 🔥")
+        master_battle_log.append(f"🔥 BATALLA {battle_num} 🔥")
+
+        # Función para selección inteligente de Pokémon
+        def smart_pokemon_selection(pokemons, opponent_pokemon, defeated_pokemons, current_pokemon):
+            """Selecciona el mejor Pokémon disponible contra el oponente"""
+            available_pokemons = [
+                p for p in pokemons 
+                if p.pokemon.id not in defeated_pokemons and 
+                (current_pokemon is None or p.pokemon.id != current_pokemon["pokemon"].id)
+            ]
+            
+            if not available_pokemons:
+                return None
+                
+            if opponent_pokemon:
+                # Seleccionar Pokémon con ventaja de tipo
+                best_pokemon = None
+                best_score = -1
+                
+                for p in available_pokemons:
+                    pokemon = p.pokemon
+                    score = 0
+                    
+                    # Ventaja de tipo
+                    type_multiplier = get_type_multiplier(pokemon.element or "Normal", opponent_pokemon.element or "Normal")
+                    if type_multiplier >= 2.0:
+                        score += 3
+                    elif type_multiplier > 1.0:
+                        score += 1
+                    elif type_multiplier <= 0.5:
+                        score -= 2
+                        
+                    # Estadísticas
+                    score += (pokemon.attack or 0) / 10
+                    score += (pokemon.special_attack or 0) / 10
+                    score += (pokemon.speed or 0) / 20
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_pokemon = pokemon
+                        
+                return best_pokemon if best_pokemon else random.choice(available_pokemons).pokemon
+            else:
+                # Primera batalla, seleccionar el más fuerte
+                return max(available_pokemons, key=lambda x: (x.pokemon.attack or 0) + (x.pokemon.special_attack or 0)).pokemon
 
         # Selección de Pokémon para esta batalla
         if keep_winner_pokemon:
@@ -535,8 +609,27 @@ async def simulate_battle(
                 trainer_pokemon = current_trainer_pokemon["pokemon"]
                 master_battle_log.append(f"⚡ {trainer.name} mantiene a {trainer_pokemon.name} en el campo! (HP: {current_trainer_pokemon['hp_remaining']}/{trainer_pokemon.hp})")
             else:
-                trainer_pokemon_choice = random.choice(trainer_pokemons).pokemon
-                trainer_pokemon = trainer_pokemon_choice
+                if smart_selection:
+                    opponent_current = current_opponent_pokemon["pokemon"] if current_opponent_pokemon else None
+                    trainer_pokemon = smart_pokemon_selection(
+                        trainer_pokemons, 
+                        opponent_current,
+                        defeated_trainer_pokemons,
+                        current_trainer_pokemon
+                    )
+                else:
+                    available_pokemons = [
+                        p for p in trainer_pokemons 
+                        if p.pokemon.id not in defeated_trainer_pokemons and 
+                        (current_trainer_pokemon is None or p.pokemon.id != current_trainer_pokemon["pokemon"].id)
+                    ]
+                    if not available_pokemons:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"{trainer.name} no tiene Pokémon disponibles para pelear"
+                        )
+                    trainer_pokemon = random.choice(available_pokemons).pokemon
+                
                 master_battle_log.append(f"⚡ {trainer.name} elige a {trainer_pokemon.name} (Nv. {trainer_pokemon.level}) para la Batalla {battle_num}!")
                 current_trainer_pokemon = None
 
@@ -545,13 +638,42 @@ async def simulate_battle(
                 opponent_pokemon = current_opponent_pokemon["pokemon"]
                 master_battle_log.append(f"⚡ {opponent.name} mantiene a {opponent_pokemon.name} en combate! (HP: {current_opponent_pokemon['hp_remaining']}/{opponent_pokemon.hp})")
             else:
-                opponent_pokemon_choice = random.choice(opponent_pokemons).pokemon
-                opponent_pokemon = opponent_pokemon_choice
+                if smart_selection:
+                    trainer_current = current_trainer_pokemon["pokemon"] if current_trainer_pokemon else None
+                    opponent_pokemon = smart_pokemon_selection(
+                        opponent_pokemons, 
+                        trainer_current,
+                        defeated_opponent_pokemons,
+                        current_opponent_pokemon
+                    )
+                else:
+                    available_pokemons = [
+                        p for p in opponent_pokemons 
+                        if p.pokemon.id not in defeated_opponent_pokemons and 
+                        (current_opponent_pokemon is None or p.pokemon.id != current_opponent_pokemon["pokemon"].id)
+                    ]
+                    if not available_pokemons:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"{opponent.name} no tiene Pokémon disponibles para pelear"
+                        )
+                    opponent_pokemon = random.choice(available_pokemons).pokemon
+                
                 master_battle_log.append(f"⚡ {opponent.name} saca a {opponent_pokemon.name} (Nv. {opponent_pokemon.level}) al ruedo!")
                 current_opponent_pokemon = None
         else:
-            trainer_pokemon = random.choice(trainer_pokemons).pokemon
-            opponent_pokemon = random.choice(opponent_pokemons).pokemon
+            # Selección aleatoria simple (sin mantener Pokémon ganadores)
+            available_trainer = [p for p in trainer_pokemons if p.pokemon.id not in defeated_trainer_pokemons]
+            available_opponent = [p for p in opponent_pokemons if p.pokemon.id not in defeated_opponent_pokemons]
+            
+            if not available_trainer or not available_opponent:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No hay suficientes Pokémon disponibles para continuar la batalla"
+                )
+                
+            trainer_pokemon = random.choice(available_trainer).pokemon
+            opponent_pokemon = random.choice(available_opponent).pokemon
             master_battle_log.append(f"⚡ {trainer.name} elige a {trainer_pokemon.name} (Nv. {trainer_pokemon.level})")
             master_battle_log.append(f"⚡ {opponent.name} elige a {opponent_pokemon.name} (Nv. {opponent_pokemon.level})")
 
@@ -579,6 +701,7 @@ async def simulate_battle(
         # Actualizar conteo de victorias
         if result["winner"] == "trainer":
             trainer_wins += 1
+            defeated_opponent_pokemons.add(result["loser_pokemon"].id)
             if keep_winner_pokemon:
                 current_trainer_pokemon = {
                     "pokemon": result["winner_pokemon"],
@@ -587,6 +710,7 @@ async def simulate_battle(
                 current_opponent_pokemon = None
         elif result["winner"] == "opponent":
             opponent_wins += 1
+            defeated_trainer_pokemons.add(result["loser_pokemon"].id)
             if keep_winner_pokemon:
                 current_opponent_pokemon = {
                     "pokemon": result["winner_pokemon"],
@@ -599,7 +723,7 @@ async def simulate_battle(
 
         # Agregar logs al registro maestro
         master_battle_log.extend(result["battle_log"])
-        master_battle_log.append(f"\n🏆 Resultado de la Batalla {battle_num}: ¡{result['winner_name']} se lleva la victoria!")
+        master_battle_log.append(f"🏆 Resultado de la Batalla {battle_num}: ¡{result['winner_name']} se lleva la victoria!")
         master_battle_log.append(f"📊 Marcador: {trainer.name} {trainer_wins} - {opponent_wins} {opponent.name}")
 
         # Guardar resultados
@@ -668,14 +792,14 @@ async def simulate_battle(
     if mvp_stats:
         mvp = max(mvp_stats.values(), key=lambda x: (x["total_wins"], x["total_damage"]))
         mvp_message = (
-            f"\n🏅 MVP del combate: {mvp['pokemon'].name} (Nv. {mvp['pokemon'].level}) de {mvp['trainer']}!\n"
-            f"• Victorias: {mvp['total_wins']}\n"
-            f"• Daño total infligido: {mvp['total_damage']} HP\n"
+            f"🏅 MVP del combate: {mvp['pokemon'].name} (Nv. {mvp['pokemon'].level}) de {mvp['trainer']}!"
+            f"• Victorias: {mvp['total_wins']}"
+            f"• Daño total infligido: {mvp['total_damage']} HP"
             f"• Movimiento más usado: {random.choice(mvp['pokemon'].moves) if hasattr(mvp['pokemon'], 'moves') and mvp['pokemon'].moves else 'Placaje'}"
         )
         master_battle_log.append(mvp_message)
 
-    master_battle_log.append("\n🎯 RESULTADO FINAL 🎯")
+    master_battle_log.append("🎯 RESULTADO FINAL 🎯")
     master_battle_log.append(
         f"{trainer.name}: {trainer_wins} victoria(s) | "
         f"{opponent.name}: {opponent_wins} victoria(s)"
@@ -700,7 +824,7 @@ async def simulate_battle(
             schemas.BattleUpdate(
                 winner=overall_winner,
                 date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                battle_log="\n".join(master_battle_log)
+                battle_log="".join(master_battle_log)
             )
         )
 
@@ -758,17 +882,19 @@ async def simulate_battle(
 async def create_battle(
     battle: schemas.BattleCreate,
     db: AsyncSession = Depends(get_db),
-    keep_winner_pokemon: bool = True
+    keep_winner_pokemon: bool = True,
+    smart_selection: bool = True
 ):
     """Inicia una nueva batalla entre dos entrenadores (mejor de 3)
-    - keep_winner_pokemon: Si True, los entrenadores mantendrán su Pokémon ganador entre batallas
+    - keep_winner_pokemon: Si True, los Pokémon ganadores permanecen en batalla
+    - smart_selection: Si True, los entrenadores eligen Pokémon estratégicamente
     """
     if battle.trainer_id == battle.opponent_id:
         raise HTTPException(
             status_code=400,
             detail="No puedes pelear contra ti mismo"
         )
-    return await simulate_battle(db, battle.trainer_id, battle.opponent_id, keep_winner_pokemon)
+    return await simulate_battle(db, battle.trainer_id, battle.opponent_id, keep_winner_pokemon, smart_selection)
 
 @router.get("/{battle_id}", response_model=schemas.BattleWithPokemon)
 async def read_battle(

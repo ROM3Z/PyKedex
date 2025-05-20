@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import declarative_base
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://isaac:20861681@localhost:27017/pykedex")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://isaac:20861681@localhost:5432/pykedex")
 
 engine = create_async_engine(
     DATABASE_URL,
