@@ -14,6 +14,13 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 Base = declarative_base()
 
 async def get_db():
+    """
+    Asynchronous generator that provides a database session for use within a context.
+    
+    Yields:
+        An active asynchronous SQLAlchemy session. The session is automatically closed
+        after use, even if an exception occurs.
+    """
     async with AsyncSessionLocal() as db:
         try:
             yield db

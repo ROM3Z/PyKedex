@@ -5,6 +5,11 @@ from app.database import engine, Base
 from app.models import *
 
 async def main():
+    """
+    Drops and recreates all database tables based on the current SQLAlchemy metadata.
+    
+    If tables already exist, lists them and prompts the user for confirmation before proceeding, warning that existing data will be deleted. Cancels the operation if not confirmed. Executes all operations asynchronously.
+    """
     async with engine.begin() as conn:
         # Verificar tablas existentes
         inspector = inspect(conn)

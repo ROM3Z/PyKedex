@@ -44,7 +44,15 @@ app = FastAPI(
 # FUNCIONES DE INICIALIZACIÓN
 # --------------------------------------------------
 async def check_tables_exist(engine: AsyncEngine) -> bool:
-    """Verifica si las tablas principales existen en la base de datos"""
+    """
+    Asynchronously checks if all required tables exist in the database.
+    
+    Args:
+    	engine: The SQLAlchemy asynchronous engine connected to the target database.
+    
+    Returns:
+    	True if all required tables ('admins', 'pokemons', 'trainers', 'trainer_pokemons', 'battles') are present; otherwise, False.
+    """
     async with engine.connect() as conn:
         # Usamos run_sync para ejecutar la inspección de forma síncrona
         existing_tables = await conn.run_sync(
@@ -54,7 +62,12 @@ async def check_tables_exist(engine: AsyncEngine) -> bool:
         return all(table in existing_tables for table in required_tables)
 
 async def initialize_database():
-    """Inicializa la base de datos creando tablas si no existen"""
+    """
+    Asynchronously initializes the database by creating required tables if they do not exist.
+    
+    Raises:
+        Exception: If an error occurs during database initialization.
+    """
     try:
         tables_exist = await check_tables_exist(engine)
         if not tables_exist:
@@ -73,7 +86,11 @@ async def initialize_database():
 # --------------------------------------------------
 @app.on_event("startup")
 async def startup_event():
-    """Evento de inicio de la aplicación"""
+    """
+    Runs application startup tasks to ensure database schema and initial admin user exist.
+    
+    This function is triggered on application startup. It initializes the database schema if necessary and ensures that an initial admin user is present.
+    """
     await initialize_database()
     await create_initial_admin()
     print("✔ Verificado/Creado administrador inicial")
@@ -97,6 +114,13 @@ app.add_middleware(
 # --------------------------------------------------
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """
+    Handles rate limit exceedance by returning a 429 response with an explanatory message.
+    
+    Returns:
+        JSONResponse indicating the client has exceeded the allowed request rate, including a
+        'Retry-After' header set to 60 seconds.
+    """
     return JSONResponse(
         status_code=429,
         content={
@@ -111,6 +135,12 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Handles HTTPException errors by returning a structured JSON response with error details.
+    
+    Returns:
+        JSONResponse: A response containing the error message, success flag, and error type.
+    """
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -125,6 +155,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # --------------------------------------------------
 @app.get("/", tags=["Inicio"])
 async def root():
+    """
+    Returns a welcome message and basic information about the PyKedex API.
+    
+    The response includes the API version, documentation path, and main available routes.
+    """
     return {
         "message": "¡Bienvenido a PyKedex!",
         "documentación": "/docs",
@@ -156,6 +191,11 @@ for router, rate_limit, scope, prefix, tags in routers_config:
 # CONFIGURACIÓN OPENAPI
 # --------------------------------------------------
 def custom_openapi():
+    """
+    Generates and caches a custom OpenAPI schema with JWT Bearer authentication.
+    
+    Adds a "BearerAuth" security scheme to the OpenAPI components and returns the schema, caching it for future use.
+    """
     if app.openapi_schema:
         return app.openapi_schema
     
