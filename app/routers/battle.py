@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 # --------------------------------------------------
-# SISTEMA DE TIPOS POKÉMON (EFECTIVIDADES)
+# SISTEMA DE TIPOS POKÉMON (EFECTIVIDADES) Y FRASES
 # --------------------------------------------------
 
 TYPE_ADVANTAGES = {
@@ -54,6 +54,61 @@ TYPE_ADVANTAGES = {
     "Hada": {"Veneno": 0.5, "Acero": 0.5}
 }
 
+BATTLE_COMMENTS = [
+    "¡El combate está muy reñido! Ambos Pokémon dan lo mejor de sí.",
+    "¡Qué intensidad! Ningún Pokémon quiere ceder terreno.",
+    "La batalla se prolonga... ¿Quién tendrá más resistencia?",
+    "¡Increíble intercambio de golpes! Esto es digno de un campeonato.",
+    "La estrategia de ambos entrenadores es impresionante.",
+    "¡El público está al borde de sus asientos con esta batalla!",
+    "Ninguno de los dos quiere perder, ¡esto es épico!",
+    "¡Qué demostración de habilidad por ambos lados!",
+    "La tensión es palpable en este enfrentamiento.",
+    "¡Están igualados! Cualquier cosa puede pasar."
+]
+
+TRAINER_DIALOGUES = {
+    "winning": [
+        "¡Así se hace! Sigue así, {pokemon}!",
+        "¡Perfecto! ¡Ese ataque fue directo!",
+        "¡Vamos {pokemon}, tú puedes!",
+        "¡Esa es la estrategia que practicamos!",
+        "¡Excelente ejecución, {pokemon}!",
+        "¡Justo como lo planeamos!",
+        "¡No le des tregua, {pokemon}!"
+    ],
+    "losing": [
+        "¡Aguanta {pokemon}, no te rindas!",
+        "¡Contraataca ahora, {pokemon}!",
+        "¡Cuidado con ese movimiento!",
+        "¡No es momento de flaquear!",
+        "¡Concéntrate, {pokemon}!",
+        "¡Puedes superarlo, {pokemon}!",
+        "¡No te dejes intimidar!"
+    ],
+    "critical": [
+        "¡Sí! ¡Un golpe crítico!",
+        "¡Directo al blanco! ¡Buen trabajo {pokemon}!",
+        "¡Ese entrenamiento está dando frutos!",
+        "¡Justo en el punto débil!",
+        "¡Impacto perfecto, {pokemon}!"
+    ],
+    "resisted": [
+        "¡Bien esquivado {pokemon}!",
+        "¡Casi te alcanza! ¡Sigue así!",
+        "¡Ese ataque no te afectará fácilmente!",
+        "¡Buena defensa, {pokemon}!",
+        "¡No tan rápido, rival!"
+    ],
+    "start": [
+        "¡{pokemon}, yo te elijo!",
+        "¡Es tu momento, {pokemon}!",
+        "¡Confío en ti, {pokemon}!",
+        "¡Hagámoslo, {pokemon}!",
+        "¡A dar lo mejor, {pokemon}!"
+    ]
+}
+
 def get_type_multiplier(attacker_type: str, defender_type: str) -> float:
     """Calcula el multiplicador de daño basado en los tipos"""
     multiplier = 1.0
@@ -92,7 +147,7 @@ def calculate_damage(
     - Ventaja de tipo
     - Nivel del Pokémon
     - Aleatoriedad
-    Retorna: (daño, es_crítico, es_especial)
+    Retorna: (daño, es_crítico, es_especial, es_resistido)
     """
     # Determinar si es un ataque especial
     is_special = "especial" in attack_used.lower()
@@ -175,7 +230,7 @@ def calculate_level_up(pokemon: schemas.Pokemon, battle_duration: int, is_winner
     return levels_gained
 
 # --------------------------------------------------
-# SIMULACIÓN DE BATALLA INDIVIDUAL
+# SIMULACIÓN DE BATALLA INDIVIDUAL (MEJORADA)
 # --------------------------------------------------
 
 async def simulate_single_battle(
@@ -187,8 +242,7 @@ async def simulate_single_battle(
     previous_trainer_hp: Optional[int] = None
 ) -> dict:
     """
-    Simula una sola batalla entre dos Pokémon.
-    Retorna un diccionario con el resultado.
+    Simula una sola batalla entre dos Pokémon con comentarios y diálogos mejorados.
     """
     # Inicialización de HP
     max_trainer_hp = trainer_pokemon.hp or 100
@@ -206,9 +260,23 @@ async def simulate_single_battle(
     last_opponent_attack = ""
     turn_count = 0
 
+    # Diálogo inicial aleatorio
+    trainer_dialogue = random.choice(TRAINER_DIALOGUES["start"]).format(pokemon=trainer_pokemon.name)
+    opponent_dialogue = random.choice(TRAINER_DIALOGUES["start"]).format(pokemon=opponent_pokemon.name)
+    battle_log.append(f"🗣️ {trainer.name}: {trainer_dialogue}")
+    battle_log.append(f"🗣️ {opponent.name}: {opponent_dialogue}")
+
     # Determinar quién ataca primero
     first_attacker, first_defender, is_trainer_first = determine_first_attacker(
         trainer_pokemon, opponent_pokemon
+    )
+
+    # Mostrar velocidades
+    speed1 = (trainer_pokemon.speed if hasattr(trainer_pokemon, 'speed') else 50)
+    speed2 = (opponent_pokemon.speed if hasattr(opponent_pokemon, 'speed') else 50)
+    
+    battle_log.append(
+        f"⚡ Velocidades: {trainer_pokemon.name} ({speed1}) vs {opponent_pokemon.name} ({speed2})"
     )
 
     battle_log.append(
@@ -225,6 +293,10 @@ async def simulate_single_battle(
     while True:
         turn_count += 1
 
+        # Comentario aleatorio cada 5 turnos
+        if turn_count % 5 == 0 and turn_count > 0:
+            battle_log.append(f"💬 {random.choice(BATTLE_COMMENTS)}")
+
         # Verificar si la batalla ha terminado
         if trainer_hp <= 0 or opponent_hp <= 0:
             break
@@ -236,14 +308,24 @@ async def simulate_single_battle(
             attacker_pokemon = trainer_pokemon
             defender_pokemon = opponent_pokemon
             attacker_level = trainer_pokemon_level
-            # defender_level = opponent_pokemon_level  <- Ya definida
+            defender_level = opponent_pokemon_level
         else:
             attacker_name = opponent.name
             defender_name = trainer.name
             attacker_pokemon = opponent_pokemon
             defender_pokemon = trainer_pokemon
             attacker_level = opponent_pokemon_level
-            # defender_level = trainer_pokemon_level  <- Ya definida
+            defender_level = trainer_pokemon_level
+
+        # Diálogo aleatorio del entrenador (30% de probabilidad)
+        if random.random() < 0.3:
+            if (is_trainer_first and trainer_hp > opponent_hp) or (not is_trainer_first and opponent_hp > trainer_hp):
+                dialogue_type = "winning"
+            else:
+                dialogue_type = "losing"
+            
+            dialogue = random.choice(TRAINER_DIALOGUES[dialogue_type]).format(pokemon=attacker_pokemon.name)
+            battle_log.append(f"🗣️ {attacker_name}: {dialogue}")
 
         # Ataque
         attack_used = get_random_attack(attacker_pokemon)
@@ -252,7 +334,7 @@ async def simulate_single_battle(
             defender_pokemon,
             attack_used,
             attacker_level,
-            opponent_pokemon_level if is_trainer_first else trainer_pokemon_level # Usamos la variable correcta aquí
+            defender_level
         )
 
         # Registrar el último ataque
@@ -260,6 +342,12 @@ async def simulate_single_battle(
             last_trainer_attack = attack_used
         else:
             last_opponent_attack = attack_used
+
+        # Diálogo para golpe crítico o resistencia (50% de probabilidad)
+        if (is_critical or resisted) and random.random() < 0.5:
+            dialogue_type = "critical" if is_critical else "resisted"
+            dialogue = random.choice(TRAINER_DIALOGUES[dialogue_type]).format(pokemon=attacker_pokemon.name)
+            battle_log.append(f"🗣️ {attacker_name}: {dialogue}")
 
         # Aplicar daño
         if is_trainer_first:
@@ -313,15 +401,15 @@ async def simulate_single_battle(
         # Verificar si el defensor se debilitó
         if (is_trainer_first and opponent_hp <= 0) or (not is_trainer_first and trainer_hp <= 0):
             # 10% + 0.1% por nivel de probabilidad de un último ataque antes de debilitarse
-            last_attack_chance = 0.1 + (opponent_pokemon_level if is_trainer_first else trainer_pokemon_level) * 0.001 # Usamos la variable correcta aquí
+            last_attack_chance = 0.1 + (defender_pokemon.level * 0.001)
             if random.random() < last_attack_chance:
                 last_attack = get_random_attack(defender_pokemon)
                 last_damage, last_critical, last_special, _ = calculate_damage(
                     defender_pokemon,
                     attacker_pokemon,
                     last_attack,
-                    opponent_pokemon_level if is_trainer_first else trainer_pokemon_level, # Usamos la variable correcta aquí
-                    trainer_pokemon_level if is_trainer_first else opponent_pokemon_level  # Usamos la variable correcta aquí
+                    defender_level,
+                    attacker_level
                 )
 
                 if is_trainer_first:
@@ -391,8 +479,9 @@ async def simulate_single_battle(
         "trainer_levels_gained": trainer_levels_gained,
         "opponent_levels_gained": opponent_levels_gained
     }
+
 # --------------------------------------------------
-# SIMULACIÓN DE BATALLA COMPLETA (MEJOR DE 3)
+# SIMULACIÓN DE BATALLA COMPLETA (MEJOR DE 3) CON MVP
 # --------------------------------------------------
 
 async def simulate_battle(
@@ -403,7 +492,7 @@ async def simulate_battle(
 ) -> schemas.BattleResult:
     """
     Simula una batalla Pokémon completa entre dos entrenadores (mejor de 3)
-    con opción de mantener el Pokémon ganador en la siguiente batalla.
+    con comentarios mejorados, diálogos y resumen MVP.
     """
     # Validación de entrenadores
     trainer = await crud.get_trainer(db, trainer_id)
@@ -437,7 +526,7 @@ async def simulate_battle(
 
     # Mejor de 3 batallas
     for battle_num in range(1, 4):
-        master_battle_log.append(f"🔥BATALLA {battle_num} 🔥")
+        master_battle_log.append(f"\n🔥 BATALLA {battle_num} 🔥")
 
         # Selección de Pokémon para esta batalla
         if keep_winner_pokemon:
@@ -510,7 +599,7 @@ async def simulate_battle(
 
         # Agregar logs al registro maestro
         master_battle_log.extend(result["battle_log"])
-        master_battle_log.append(f"🏆 Resultado de la Batalla {battle_num}: ¡{result['winner_name']} se lleva la victoria!")
+        master_battle_log.append(f"\n🏆 Resultado de la Batalla {battle_num}: ¡{result['winner_name']} se lleva la victoria!")
         master_battle_log.append(f"📊 Marcador: {trainer.name} {trainer_wins} - {opponent_wins} {opponent.name}")
 
         # Guardar resultados
@@ -540,7 +629,53 @@ async def simulate_battle(
         is_trainer_winner = None
         commentator += " ¡Un final reñido! ¡La batalla termina en un empate! 🤝"
 
-    master_battle_log.append("🎯 RESULTADO FINAL 🎯")
+    # Determinar Pokémon MVP (mayor daño total o más victorias)
+    mvp_data = []
+    for result in battle_results:
+        # Daño infligido por el Pokémon del entrenador
+        trainer_damage = (result["opponent_pokemon"].hp or 100) - result["opponent_hp_remaining"]
+        mvp_data.append({
+            "pokemon": result["trainer_pokemon"],
+            "damage": trainer_damage,
+            "wins": 1 if result["winner"] == "trainer" else 0,
+            "trainer": trainer.name
+        })
+        
+        # Daño infligido por el Pokémon del oponente
+        opponent_damage = (result["trainer_pokemon"].hp or 100) - result["trainer_hp_remaining"]
+        mvp_data.append({
+            "pokemon": result["opponent_pokemon"],
+            "damage": opponent_damage,
+            "wins": 1 if result["winner"] == "opponent" else 0,
+            "trainer": opponent.name
+        })
+    
+    # Consolidar datos por Pokémon
+    mvp_stats = {}
+    for data in mvp_data:
+        key = data["pokemon"].id
+        if key not in mvp_stats:
+            mvp_stats[key] = {
+                "pokemon": data["pokemon"],
+                "total_damage": 0,
+                "total_wins": 0,
+                "trainer": data["trainer"]
+            }
+        mvp_stats[key]["total_damage"] += data["damage"]
+        mvp_stats[key]["total_wins"] += data["wins"]
+    
+    # Determinar MVP
+    if mvp_stats:
+        mvp = max(mvp_stats.values(), key=lambda x: (x["total_wins"], x["total_damage"]))
+        mvp_message = (
+            f"\n🏅 MVP del combate: {mvp['pokemon'].name} (Nv. {mvp['pokemon'].level}) de {mvp['trainer']}!\n"
+            f"• Victorias: {mvp['total_wins']}\n"
+            f"• Daño total infligido: {mvp['total_damage']} HP\n"
+            f"• Movimiento más usado: {random.choice(mvp['pokemon'].moves) if hasattr(mvp['pokemon'], 'moves') and mvp['pokemon'].moves else 'Placaje'}"
+        )
+        master_battle_log.append(mvp_message)
+
+    master_battle_log.append("\n🎯 RESULTADO FINAL 🎯")
     master_battle_log.append(
         f"{trainer.name}: {trainer_wins} victoria(s) | "
         f"{opponent.name}: {opponent_wins} victoria(s)"
@@ -611,7 +746,8 @@ async def simulate_battle(
         trainer_wins=trainer_wins,
         opponent_wins=opponent_wins,
         is_best_of_three=True,
-        keep_winner_pokemon=keep_winner_pokemon
+        keep_winner_pokemon=keep_winner_pokemon,
+        mvp_pokemon=mvp["pokemon"] if mvp_stats else None
     )
 
 # --------------------------------------------------
