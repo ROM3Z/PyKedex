@@ -11,10 +11,31 @@ API REST inspirada en Pokémon construida con FastAPI, PostgreSQL y autenticaci�
 
 - **Operaciones CRUD completas** para Pokémon, Entrenadores y Batallas
 - **Autenticación JWT** con roles de admin/superadmin
-- **Sistema de batallas por turnos** con cálculo de daño
+- **Sistema de batallas por turnos avanzado** con:
+  - Cálculo de daño 4x/0.25x para múltiples debilidades/resistencias
+  - Selección inteligente de Pokémon basada en ventajas de tipo y estadísticas
+  - Gestión de Pokémon derrotados (no pueden volver a combatir)
 - **Operaciones asíncronas** con SQLAlchemy y PostgreSQL
 - **Documentación automática** con Swagger UI y ReDoc
 - **Preparado para producción** con seguridad y validaciones
+
+## Mejoras Recientes 🚀
+
+### Sistema de Batallas
+- **Daño 4x/0.25x**: Cálculo preciso de múltiples debilidades/resistencias
+- **Selección inteligente**: Los entrenadores eligen Pokémon estratégicamente
+- **Diálogos mejorados**: Mensajes especiales para combates extremos
+- **MVP**: Identificación del Pokémon más valioso en cada batalla
+
+### Base de Datos
+- **Gestión asíncrona mejorada**: Creación y verificación de tablas
+- **Pool de conexiones optimizado**: Mejor manejo de conexiones concurrentes
+- **Sesiones mejoradas**: Limpieza automática de recursos
+
+### Seguridad
+- **Middleware reforzado**: Protección adicional para endpoints
+- **Manejo de errores**: Respuestas estructuradas para excepciones
+- **OpenAPI actualizado**: Documentación de seguridad mejorada
 
 ## Estructura del Proyecto 📂
 
@@ -23,13 +44,14 @@ app/
 ├── routers/
 │   ├── admin.py       # Endpoints de administración
 │   ├── auth.py        # Autenticación JWT
-│   ├── battle.py      # Lógica de batallas
+│   ├── battle.py      # Lógica avanzada de batallas
 │   ├── pokemon.py     # Endpoints de Pokémon
 │   └── trainer.py     # Endpoints de Entrenadores
 ├── crud.py            # Operaciones de base de datos
-├── database.py        # Configuración de DB
+├── database.py        # Configuración mejorada de DB
+├── create_tables.py   # Script para gestión de tablas
 ├── initial_data.py    # Cargador de datos iniciales
-├── main.py            # Aplicación principal
+├── main.py            # Aplicación principal mejorada
 ├── models.py          # Modelos SQLAlchemy
 └── schemas.py         # Esquemas Pydantic
 ```
@@ -55,7 +77,12 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-4. Ejecuta la aplicación:
+4. (Opcional) Crea las tablas:
+```bash
+python app/create_tables.py
+```
+
+5. Ejecuta la aplicación:
 ```bash
 uvicorn app.main:app --reload
 ```
@@ -67,36 +94,8 @@ Una vez en funcionamiento, accede a la documentación interactiva:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
-## Ejemplos de Uso 🎮
+## Ejemplo de Batalla Mejorada ⚔️
 
-### Autenticación
-```http
-POST /token
-Content-Type: application/json
-
-{
-    "username": "admin",
-    "password": "secreto"
-}
-```
-
-### Crear un Pokémon (requiere autenticación)
-```http
-POST /pokemons
-Authorization: Bearer <tu-token>
-Content-Type: application/json
-
-{
-    "name": "Pikachu",
-    "element": "Eléctrico",
-    "hp": 35,
-    "attack": 55,
-    "defense": 40,
-    "moves": ["Impactrueno", "Ataque Rápido"]
-}
-```
-
-### Simular una Batalla
 ```http
 POST /battles
 Authorization: Bearer <tu-token>
@@ -104,9 +103,15 @@ Content-Type: application/json
 
 {
     "trainer_id": 1,
-    "opponent_id": 2
+    "opponent_id": 2,
+    "smart_selection": true  # Activa selección inteligente de Pokémon
 }
 ```
+
+Respuesta incluye:
+- Turnos detallados con efectividad de ataques (x4, x2, x0.5, x0.25)
+- MVP de la batalla (Pokémon más valioso)
+- Pokémon derrotados que no podrán volver a combatir
 
 ## Contribuciones 🤝
 
@@ -121,4 +126,4 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 **Desarrollado por Isaac Rodríguez ROMEZ**  
 **Para el Curso PyKedex de DruidCode**  
 
-"¡Atrápalos ya!" - Pokémon
+"¡Los combates Pokémon ahora son más estratégicos que nunca!"
