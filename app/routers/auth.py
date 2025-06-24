@@ -14,7 +14,7 @@ from app.database import get_db
 # Configuración (debes mover esto a variables de entorno)
 SECRET_KEY = "PykedexSecretKey"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Duración del token en minutos
 
 router = APIRouter(tags=["auth"])
 

@@ -12,7 +12,7 @@ asyncpg==0.29.0  # Opcional, solo si usas async/await con PostgreSQL
 python-multipart==0.0.9
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.12.2
-fastapi-cache2==0.2.5
+fastapi-cache2==0.2.2
 slowapi==0.1.8
 limits==3.7.0
 

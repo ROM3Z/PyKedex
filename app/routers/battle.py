@@ -379,7 +379,7 @@ async def simulate_single_battle(
             opponent_hp = max(0, opponent_hp)  # No puede ser negativo
         else:
             trainer_hp -= damage
-            trainer_hp = max(0, trainer_hp)
+            trainer_hp = max(0, trainer_hp) # No puede ser negativo
 
         # Mensajes de log
         type_message = ""
