@@ -19,6 +19,7 @@ namespace Infrastructure.Data
         public DbSet<TrainerPokemon> TrainerPokemons { get; set; }
         public DbSet<Battle> Battles { get; set; }
         public DbSet<BattlePokemon> BattlePokemons { get; set; }
+        public DbSet<BattleLog> BattleLogs { get; set; }
         public DbSet<Admin> Admins { get; set; }
 
         /// <summary>

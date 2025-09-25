@@ -22,6 +22,9 @@ namespace Infrastructure
             // Esto permite que cualquier servicio pueda inyectar IRepository<T>.
             services.AddScoped(typeof(IRepository<>), typeof(EfRepository<>));
 
+            // Registra repositorios específicos.
+            services.AddScoped<ITrainerRepository, TrainerRepository>();
+
             return services;
         }
     }

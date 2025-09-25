@@ -61,5 +61,12 @@ namespace Core.Entities
         /// Nivel actual del Pokémon.
         /// </summary>
         public int Level { get; set; } = 1;
+
+        /// <summary>
+        /// HP actual del Pokémon, usado en combates.
+        /// No se mapea a la base de datos ya que es un estado temporal.
+        /// </summary>
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public int CurrentHp { get; set; }
     }
 }

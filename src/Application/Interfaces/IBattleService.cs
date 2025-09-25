@@ -1,5 +1,5 @@
+using Application.Dtos;
 using Core.Entities;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Application.Interfaces
@@ -10,11 +10,12 @@ namespace Application.Interfaces
     public interface IBattleService
     {
         /// <summary>
-        /// Inicia una nueva batalla.
+        /// Simula una batalla entre dos entrenadores y guarda el resultado.
         /// </summary>
-        /// <param name="battle">La información de la batalla a crear.</param>
-        /// <returns>La batalla creada.</returns>
-        Task<Battle> CreateBattleAsync(Battle battle);
+        /// <param name="trainer1Id">El ID del primer entrenador.</param>
+        /// <param name="trainer2Id">El ID del segundo entrenador.</param>
+        /// <returns>El resultado de la batalla.</returns>
+        Task<BattleResultDto> SimulateBattleAsync(int trainer1Id, int trainer2Id);
 
         /// <summary>
         /// Obtiene una batalla por su ID.

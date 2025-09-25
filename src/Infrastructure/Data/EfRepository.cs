@@ -11,7 +11,7 @@ namespace Infrastructure.Data
     /// <typeparam name="T">La entidad con la que trabajará el repositorio.</typeparam>
     public class EfRepository<T> : IRepository<T> where T : class
     {
-        private readonly AppDbContext _dbContext;
+        protected readonly AppDbContext _dbContext;
 
         public EfRepository(AppDbContext dbContext)
         {

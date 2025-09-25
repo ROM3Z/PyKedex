@@ -44,5 +44,10 @@ namespace Core.Entities
         /// Pokémon que participaron en esta batalla.
         /// </summary>
         public ICollection<BattlePokemon> Pokemons { get; set; } = new List<BattlePokemon>();
+
+        /// <summary>
+        /// Registros de eventos que ocurrieron durante la batalla.
+        /// </summary>
+        public ICollection<BattleLog> Logs { get; set; } = new List<BattleLog>();
     }
 }
